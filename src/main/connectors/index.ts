@@ -15,7 +15,7 @@ export function connectorFor(account: Account): MailConnector {
     case 'microsoft':
       return new GraphConnector(account, () => accessToken(account))
     case 'google':
-      return new ImapConnector({ ...account, imap: account.imap ?? { ...GOOGLE_IMAP } }, async () => ({ accessToken: await accessToken(account) }))
+      return new ImapConnector({ ...account, imap: account.imap ?? { ...GOOGLE_IMAP }, smtp: account.smtp ?? { ...GOOGLE_SMTP } }, async () => ({ accessToken: await accessToken(account) }))
     case 'imap':
       return new ImapConnector(account, async () => {
         const pass = getSecret(account.id)
