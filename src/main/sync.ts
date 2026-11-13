@@ -1,21 +1,27 @@
-import type { Account, SyncStatus } from '@shared/types'
+import type { Account, MessageSummary, SyncStatus } from '@shared/types'
 import { connectorFor } from './connectors'
 import type { MailConnector } from './connectors/types'
 import * as db from './db'
 import { getAccounts } from './store'
 
-/** Messages pulled per folder per sync. First syncs take this many newest; later syncs backfill or fetch new. */
-const BATCH = 200
+/** Messages pulled per folder on a first sync, and per "load older" step */
+export const BATCH = 200
 /** Folders synced on every pass; the rest sync when opened */
 const ALWAYS = new Set(['inbox', 'sent', 'drafts'])
 
 const connectors = new Map<string, MailConnector>()
+const watchers = new Map<string, () => void>()
 const running = new Map<string, Promise<void>>()
-let notify: (channel: 'sync:status' | 'mail:changed', payload: unknown) => void = () => {}
+
+type Notify = (channel: 'sync:status' | 'mail:changed', payload: unknown) => void
+let notify: Notify = () => {}
+/** Called with messages that just arrived in an inbox (not on first sync) */
+let onNewMail: (account: Account, messages: MessageSummary[]) => void = () => {}
 let timer: NodeJS.Timeout | null = null
 
-export function init(send: typeof notify): void {
+export function init(send: Notify, newMail: typeof onNewMail): void {
   notify = send
+  onNewMail = newMail
 }
 
 export function connector(account: Account): MailConnector {
@@ -25,6 +31,8 @@ export function connector(account: Account): MailConnector {
 }
 
 export async function dropConnector(accountId: string): Promise<void> {
+  watchers.get(accountId)?.()
+  watchers.delete(accountId)
   await connectors.get(accountId)?.close()
   connectors.delete(accountId)
 }
@@ -33,7 +41,21 @@ function status(s: Omit<SyncStatus, 'at'>): void {
   notify('sync:status', { ...s, at: Date.now() })
 }
 
-/** Sync one account. Concurrent calls for the same account share the running sync. */
+/** Start push (IMAP IDLE) or polling for an account's inbox, once its folders are known */
+function ensureWatcher(account: Account): void {
+  if (watchers.has(account.id)) return
+  const inbox = db.folderByRole(account.id, 'inbox')
+  if (!inbox) return
+  let pending: NodeJS.Timeout | null = null
+  const stop = connector(account).watch(inbox.id, () => {
+    // Servers send several events per arrival; one sync covers them all
+    if (pending) clearTimeout(pending)
+    pending = setTimeout(() => void syncAccount(account, inbox.id), 1500)
+  })
+  watchers.set(account.id, stop)
+}
+
+/** Sync one account (or one folder of it). Concurrent calls for the same target share the running sync. */
 export function syncAccount(account: Account, onlyFolder?: string): Promise<void> {
   const key = account.id + (onlyFolder ?? '')
   const existing = running.get(key)
@@ -42,14 +64,20 @@ export function syncAccount(account: Account, onlyFolder?: string): Promise<void
     status({ accountId: account.id, state: 'syncing' })
     try {
       const c = connector(account)
-      db.saveFolders(account.id, await c.listFolders())
+      if (!onlyFolder || !db.getFolder(account.id, onlyFolder)) db.saveFolders(account.id, await c.listFolders())
       notify('mail:changed', { accountId: account.id })
       const folders = db.listFolders(account.id).filter((f) => (onlyFolder ? f.id === onlyFolder : ALWAYS.has(f.role)))
       for (const f of folders) {
-        const result = await c.syncFolder(f.id, db.getFolderState(account.id, f.id), BATCH)
+        const before = db.getFolderState(account.id, f.id)
+        const result = await c.syncFolder(f.id, before, BATCH)
         db.applySync(account.id, f.id, result)
-        if (result.upserts.length || result.deletes.length || result.flagUpdates.length) notify('mail:changed', { accountId: account.id, folderId: f.id })
+        if (f.role === 'inbox' && before !== null && !result.reset) {
+          const fresh = result.upserts.filter((u) => u.unread).map((u) => db.getMessage(db.messageKey(account.id, f.id, u.remoteId))).filter((m) => m !== null)
+          if (fresh.length) onNewMail(account, fresh)
+        }
+        if (result.upserts.length || result.deletes.length || result.flagUpdates.length || result.existing) notify('mail:changed', { accountId: account.id, folderId: f.id })
       }
+      ensureWatcher(account)
       status({ accountId: account.id, state: 'idle' })
     } catch (e) {
       // A broken connection gets rebuilt on the next attempt
@@ -61,6 +89,19 @@ export function syncAccount(account: Account, onlyFolder?: string): Promise<void
   })()
   running.set(key, p)
   return p
+}
+
+/** Page older mail in from the server. Returns false when the folder has nothing older. */
+export async function loadOlder(account: Account, folderId: string): Promise<boolean> {
+  const state = db.getFolderState(account.id, folderId)
+  if (state === null) {
+    await syncAccount(account, folderId)
+    return true
+  }
+  const r = await connector(account).fetchOlder(folderId, state, BATCH)
+  db.applyOlder(account.id, folderId, r.upserts, r.state)
+  if (r.upserts.length) notify('mail:changed', { accountId: account.id, folderId })
+  return !r.done || r.upserts.length > 0
 }
 
 export async function syncAll(): Promise<void> {

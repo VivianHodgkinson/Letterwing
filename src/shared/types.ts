@@ -31,6 +31,12 @@ export interface Account {
   clientId?: string
   /** Microsoft tenant: 'common', 'organizations' or a tenant GUID/domain */
   tenant?: string
+  /** Name shown to recipients, e.g. "Vivian Hodgkinson". The account `name` is only a label in Inkwell. */
+  senderName?: string
+  /** HTML signature for new messages */
+  signature?: string
+  /** Also add the signature to replies and forwards (the classic second signature setting) */
+  signatureOnReplies?: boolean
 }
 
 /** What the renderer sends to create an account. The secret goes to the keyring, never to disk in plain text. */
@@ -71,6 +77,13 @@ export interface MessageSummary {
   unread: boolean
   flagged: boolean
   hasAttachments: boolean
+  /** RFC 5322 Message-ID, used for threading and to de-duplicate copies across folders */
+  messageId: string
+  /** Conversation: Graph conversationId, Gmail thread ID, or the root of the References chain */
+  threadId: string
+  /** Set in conversation view: messages in this conversation across the account, and how many are unread */
+  threadCount?: number
+  threadUnread?: number
 }
 
 export interface Attachment {
@@ -89,6 +102,39 @@ export interface MessageBody {
   attachments: Attachment[]
   /** True when the HTML references remote images, so the UI can offer "Load images" */
   hasRemoteContent: boolean
+  /** For replies: the original's Message-ID, References chain and Reply-To */
+  messageId: string
+  references: string[]
+  replyTo: Address[]
+}
+
+/** A file to send: from disk, or an attachment of an existing message (forwarding, reopened drafts) */
+export interface OutgoingAttachment {
+  id: string
+  filename: string
+  contentType: string
+  size: number
+  source: { kind: 'file'; path: string } | { kind: 'message'; key: string; attachmentId: string }
+}
+
+/** A message being written. Saved to the server's Drafts folder and sent from the account in `accountId`. */
+export interface Outgoing {
+  accountId: string
+  to: Address[]
+  cc: Address[]
+  bcc: Address[]
+  subject: string
+  html: string
+  attachments: OutgoingAttachment[]
+  /** Set on replies so the message threads correctly */
+  inReplyTo?: { key: string; messageId: string; references: string[] }
+  /** The server copy of this draft: replaced on every save, deleted when the message is sent */
+  serverDraft?: { folderId: string; remoteId: string } | null
+}
+
+export interface Contact {
+  name: string
+  address: string
 }
 
 export type ReadingPane = 'right' | 'bottom' | 'off'
@@ -99,6 +145,10 @@ export interface Settings {
   density: Density
   /** CSS variable overrides, e.g. { "--accent": "#ff8800" }. The whole look is driven by these. */
   themeVars: Record<string, string>
+  /** Group messages into conversations, like the classic "Show as conversations" */
+  conversations: boolean
+  /** Desktop notification for new mail in an inbox */
+  notifications: boolean
   /** Load remote images without asking (privacy: off by default) */
   loadRemoteImages: boolean
   /** Base keyboard scheme; Classic unless the user picks another */
