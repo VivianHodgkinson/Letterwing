@@ -13,7 +13,7 @@ const MAX_INLINE = 5 * 1024 * 1024
 const FLAG_WINDOW = 500
 
 /**
- * Any IMAP server: Gmail (OAuth), Microsoft 365 / personal Microsoft accounts IMAP, Fastmail,
+ * Any IMAP server: Gmail (OAuth), Microsoft 365 IMAP, Fastmail,
  * iCloud, cPanel/Dovecot hosting, etc. Sends over SMTP with the same login.
  *
  * Folder state is "UIDVALIDITY:highestUID:lowestUID:done", i.e. the UID range

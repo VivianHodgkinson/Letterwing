@@ -65,7 +65,7 @@ export interface Api {
   saveEvent(input: EventInput): Promise<void>
   deleteEvent(key: string): Promise<void>
   respondToEvent(key: string, answer: 'accepted' | 'tentative' | 'declined', comment?: string): Promise<void>
-  /** Answer the invitation in a message; the message then moves to Deleted Items, like Classic */
+  /** Answer the invitation in a message; the message then moves to Deleted Items */
   respondToInvite(messageKey: string, answer: 'accepted' | 'tentative' | 'declined', comment?: string): Promise<void>
   syncCalendars(): Promise<void>
 }

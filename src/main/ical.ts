@@ -252,7 +252,7 @@ export function parseInvite(ics: string, me: string): Invite | null {
 
 /**
  * The iMIP reply (RFC 6047) an organizer's calendar understands: METHOD:REPLY with only my
- * attendee line. Works with Classic, Google and anything else that sends standard invites.
+ * attendee line. Understood by any calendar system that sends standard invites.
  */
 export function buildInviteReply(ics: string, me: Address, status: 'accepted' | 'tentative' | 'declined'): string {
   const root = parse(ics)

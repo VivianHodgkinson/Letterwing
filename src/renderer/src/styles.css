@@ -287,7 +287,7 @@ kbd { font: 11.5px ui-monospace, monospace; background: var(--bg-3); border: 1px
 .tg-now { position: absolute; left: -4px; right: 0; height: 2px; background: var(--danger); pointer-events: none; z-index: 2; }
 .tg-now::before { content: ''; position: absolute; left: 0; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 
-/* Event chips: tinted by calendar colour; state shown like Classic */
+/* Event chips: tinted by calendar colour; tentative hatched, unanswered dashed, declined struck through */
 .ev { height: 100%; background: color-mix(in srgb, var(--ev) 26%, var(--bg-1)); border-left: 3px solid var(--ev); border-radius: 4px; padding: 2px 6px; font-size: 12px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; gap: 0; color: var(--text); }
 .ev:hover { background: color-mix(in srgb, var(--ev) 38%, var(--bg-1)); }
 .ev.compact { height: auto; flex-direction: row; gap: 6px; padding: 1px 6px; }

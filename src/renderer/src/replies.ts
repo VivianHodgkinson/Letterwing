@@ -20,7 +20,7 @@ export function newMessage(account: Account, to: Address[] = []): Outgoing {
 }
 
 /**
- * business-style reply or forward: "RE:"/"FW:" subject, your text on top, then a
+ * A reply or forward in the usual business format: "RE:"/"FW:" subject, your text on top, then a
  * From/Sent/To/Subject block and the original message.
  */
 export function buildReply(kind: ReplyKind, m: MessageSummary, body: MessageBody, account: Account): Outgoing {
@@ -39,7 +39,7 @@ export function buildReply(kind: ReplyKind, m: MessageSummary, body: MessageBody
     cc = unique(body.cc.filter(notMe)).filter((a) => !to.some((t) => t.address.toLowerCase() === a.address.toLowerCase()))
   }
 
-  // Like Classic: RE: on replies unless already there; FW: on forwards unless already there ("RE: FW: x" is normal)
+  // RE: on replies unless already there; FW: on forwards unless already there ("RE: FW: x" is normal)
   const already = kind === 'forward' ? /^(fw|fwd|wg)\s*:/i : /^(re|aw)\s*:/i
   const subject = already.test(m.subject) ? m.subject : (kind === 'forward' ? 'FW: ' : 'RE: ') + m.subject
 

@@ -4,8 +4,8 @@ import { buildEventIcs, buildInviteReply, eventsFromIcs, parseInvite, setMyRespo
 
 const me = { name: 'Test User', address: 'me@issue.test' }
 
-// business-style: Windows zone name with its own VTIMEZONE, weekly series, one moved and one cancelled occurrence
-const classic = `BEGIN:VCALENDAR
+// Exchange-style invite: Windows zone name with its own VTIMEZONE, weekly series, one moved and one cancelled occurrence
+const exchangeInvite = `BEGIN:VCALENDAR
 METHOD:REQUEST
 PRODID:Microsoft Exchange Server 2010
 VERSION:2.0
@@ -44,7 +44,7 @@ END:VCALENDAR`.replace(/\n/g, '\r\n')
 
 const from = Date.parse('2026-11-01T00:00:00+02:00')
 const to = Date.parse('2026-12-01T00:00:00+02:00')
-const occ = eventsFromIcs(classic, '/cal/1.ics', from, to, 'me@issue.test')
+const occ = eventsFromIcs(exchangeInvite, '/cal/1.ics', from, to, 'me@issue.test')
 const local = (ms: number) => new Date(ms).toISOString()
 assert.deepEqual(occ.map((e) => [local(e.start), e.title]), [
   ['2026-11-09T07:00:00.000Z', 'Stand-up'],
@@ -63,11 +63,11 @@ assert.equal(first.showAs, 'tentative')
 assert.equal(first.end - first.start, 30 * 60_000)
 
 // Invite in mail, and the iMIP reply
-const invite = parseInvite(classic, 'me@issue.test')!
+const invite = parseInvite(exchangeInvite, 'me@issue.test')!
 assert.equal(invite.method, 'REQUEST')
 assert.equal(invite.title, 'Stand-up')
 assert.equal(invite.recurring, true)
-const reply = buildInviteReply(classic, me, 'accepted')
+const reply = buildInviteReply(exchangeInvite, me, 'accepted')
 assert.match(reply, /METHOD:REPLY/)
 assert.match(reply, /UID:040000008200E00074C5B7101A82E008000000001/)
 assert.match(reply, /SEQUENCE:2/)
@@ -79,7 +79,7 @@ assert.equal(parsedReply.method, 'REPLY')
 assert.equal(parsedReply.start, invite.start, 'times survive the round trip')
 
 // Answering in a CalDAV calendar: every instance gets my PARTSTAT
-const answered = setMyResponse(classic, me, 'tentative')
+const answered = setMyResponse(exchangeInvite, me, 'tentative')
 const after = eventsFromIcs(answered, 'x', from, to, 'me@issue.test')
 assert.equal(after[0].myStatus, 'tentative')
 assert.equal(after[1].attendees.find((a) => a.address === 'me@issue.test')!.status, 'tentative', 'exception got an attendee line added')

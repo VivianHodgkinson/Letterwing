@@ -21,7 +21,7 @@ export function TimeGrid({ days, events, colorOf, selected, workStart, workEnd, 
   const scroller = useRef<HTMLDivElement>(null)
   const [now, setNow] = useState(Date.now())
 
-  // Open at the start of the working day, like Classic
+  // Open at the start of the working day
   useEffect(() => {
     if (scroller.current) scroller.current.scrollTop = Math.max(0, (workStart - 0.5) * HOUR)
   }, [days[0]])

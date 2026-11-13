@@ -52,8 +52,8 @@ export interface ActionInfo {
   label: string
   group: 'Navigate' | 'Message' | 'Compose' | 'Search' | 'Calendar' | 'App'
   /**
-   * Where the action works. Actions in different scopes may share a key (J is "next message" in
-   * mail and "next week" in the calendar, as in Gmail and Google Calendar). Unset means everywhere.
+   * Where the action works. Actions in different scopes may share a key (J can be "next message"
+   * in mail and "next week" in the calendar). Unset means everywhere.
    */
   scope?: 'mail' | 'calendar'
   /**
@@ -107,6 +107,7 @@ export const ACTIONS: ActionInfo[] = [
 export type Keymap = Record<ActionId, string[]>
 
 export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keymap }> = {
+  // Ctrl-based shortcuts, the long-standing desktop mail conventions
   classic: {
     name: 'Classic',
     keys: {
@@ -131,7 +132,7 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       newMessage: ['Ctrl+N', 'Ctrl+Shift+M'],
       send: ['Ctrl+Enter', 'Alt+S'],
       saveDraft: ['Ctrl+S'],
-      // Escape belongs to Clear search; Classic closes a message with the window's close button
+      // Escape belongs to Clear search; close a message with its close button
       closeCompose: [],
       search: ['Ctrl+E', 'F3'],
       clearSearch: ['Escape'],
@@ -147,10 +148,11 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       calendarMonth: ['Ctrl+Alt+4'],
       prevPeriod: ['Alt+Up', 'Left'],
       nextPeriod: ['Alt+Down', 'Right'],
-      // Classic has no single key for this (it's on the ribbon); T matches Google Calendar
+      // T for today
       goToToday: ['T']
     }
   },
+  // One key per action, no modifiers; J/K and friends
   singlekey: {
     name: 'Single-key',
     keys: {
@@ -183,7 +185,6 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       addAccount: [],
       goToMail: ['G M'],
       goToCalendar: ['G C'],
-      // single-key calendar keys
       newEvent: ['C'],
       calendarDay: ['D'],
       calendarWorkWeek: ['X'],

@@ -257,7 +257,7 @@ function AccountSettings({ account: a, onChange, onRemove }: { account: Account;
             <input value={senderName} placeholder="e.g. Jo Bloggs" onChange={(e) => setSenderName(e.target.value)} onBlur={() => void onChange({ senderName: senderName.trim() })} />
           </label>
           <label>
-            Signature <small>(paste from Classic or Word to keep formatting and logos)</small>
+            Signature <small>(paste your existing signature to keep its formatting and logo)</small>
           </label>
           <div ref={sig} className="editor signature-editor" contentEditable suppressContentEditableWarning onBlur={() => void onChange({ signature: sig.current?.innerHTML ?? '' })} />
           <label className="check">

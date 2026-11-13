@@ -225,7 +225,7 @@ export function App() {
 
   const selection = (): string[] => (selected.size ? [...selected] : primary ? [primary] : [])
 
-  /** After a delete/archive/move, select the next message, like Classic */
+  /** After a delete/archive/move, select the next message */
   const removeAndAdvance = async (run: (keys: string[]) => Promise<void>, verb: string) => {
     const keys = selection()
     if (!keys.length) return

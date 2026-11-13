@@ -35,7 +35,7 @@ export interface Account {
   senderName?: string
   /** HTML signature for new messages */
   signature?: string
-  /** Also add the signature to replies and forwards (the classic second signature setting) */
+  /** Also add the signature to replies and forwards */
   signatureOnReplies?: boolean
   /** CalDAV server for IMAP accounts (Fastmail, iCloud, Nextcloud...). Microsoft and Google accounts don't need it. */
   caldavUrl?: string
@@ -239,7 +239,7 @@ export interface Settings {
   density: Density
   /** CSS variable overrides, e.g. { "--accent": "#ff8800" }. The whole look is driven by these. */
   themeVars: Record<string, string>
-  /** Group messages into conversations, like the classic "Show as conversations" */
+  /** Group messages into conversations */
   conversations: boolean
   /** Desktop notification for new mail in an inbox */
   notifications: boolean

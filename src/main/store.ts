@@ -1,6 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { PRESETS } from '@shared/keys'
 import type { Account, Settings } from '@shared/types'
 
 const dir = (): string => {
@@ -48,7 +49,10 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 export function getSettings(): Settings {
-  return { ...DEFAULT_SETTINGS, ...readJson<Partial<Settings>>('settings.json', {}) }
+  const s = { ...DEFAULT_SETTINGS, ...readJson<Partial<Settings>>('settings.json', {}) }
+  // A scheme name from an older version falls back to the default
+  if (!(s.keymapPreset in PRESETS)) s.keymapPreset = 'classic'
+  return s
 }
 
 export function saveSettings(patch: Partial<Settings>): Settings {

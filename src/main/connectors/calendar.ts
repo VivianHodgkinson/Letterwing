@@ -168,7 +168,7 @@ export class GraphCalendar implements CalendarConnector {
   }
 
   async updateEvent(input: EventInput, existing: CalendarEvent): Promise<void> {
-    // On an occurrence ID this changes just that occurrence, like the classic "this event" option
+    // On an occurrence ID this changes just that occurrence ("this event only")
     await this.graph.call(`/me/events/${existing.remoteId}`, { method: 'PATCH', body: JSON.stringify(this.body(input, false)) })
   }
 

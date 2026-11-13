@@ -99,14 +99,14 @@
       "icon": "resources/icons",
       "category": "Office;Email;Calendar",
       "synopsis": "Mail and calendar for Microsoft 365, Gmail and IMAP",
-      "description": "A customisable desktop mail and calendar client: Microsoft 365, Gmail and any IMAP account, conversations, offline search, business-style shortcuts and themes.",
+      "description": "A customisable desktop mail and calendar client: Microsoft 365, Google and any IMAP account, conversations, offline search, editable keyboard shortcuts and themes.",
       "maintainer": "Vivian Hodgkinson",
       "vendor": "Vivian Hodgkinson",
       "desktop": {
         "entry": {
           "Name": "Letterwing",
           "GenericName": "Mail and Calendar",
-          "Keywords": "mail;email;calendar;classic;imap;gmail;"
+          "Keywords": "mail;email;calendar;imap;"
         }
       },
       "target": [

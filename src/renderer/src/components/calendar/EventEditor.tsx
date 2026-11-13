@@ -74,7 +74,7 @@ export function EventEditor({ initial, calendars, accounts, occurrence, onSave, 
               onChange={(e) => {
                 const start = fromInput(e.target.value)
                 if (Number.isNaN(start)) return
-                // Moving the start keeps the length, as in Classic
+                // Moving the start keeps the length
                 set({ start, end: start + (ev.end - ev.start) })
               }}
             />

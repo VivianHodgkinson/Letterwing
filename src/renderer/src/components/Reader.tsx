@@ -46,7 +46,7 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
       if (!live) return
       const list = t.length ? t : [message]
       setThread(list)
-      // Open the selected message and anything unread; collapse the rest, like Classic
+      // Open the selected message and anything unread; collapse the rest
       setExpanded(new Set(list.filter((m) => m.key === message.key || m.unread).map((m) => m.key)))
     })
     return () => {

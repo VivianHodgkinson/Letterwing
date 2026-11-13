@@ -14,7 +14,7 @@ type Detected = Awaited<ReturnType<typeof api.detectProvider>>
 const PROVIDER: Record<AccountKind, string> = { google: 'Google', microsoft: 'Microsoft', imap: 'your mail provider' }
 
 /**
- * Add an account the way Classic does: type your address, Letterwing works out who hosts it,
+ * Add an account: type your address, Letterwing works out who hosts it,
  * and Google / Microsoft accounts sign in through the browser. Server settings only appear
  * for other providers (or if you ask for them).
  */
@@ -144,8 +144,8 @@ export function AccountDialog({ onClose, onAdded }: Props) {
           <div className="tabs">
             {(
               [
-                ['microsoft', 'Microsoft 365 / Classic'],
-                ['google', 'Google / Gmail'],
+                ['microsoft', 'Microsoft 365 / Microsoft account'],
+                ['google', 'Google'],
                 ['imap', 'Other (IMAP)']
               ] as const
             ).map(([k, l]) => (

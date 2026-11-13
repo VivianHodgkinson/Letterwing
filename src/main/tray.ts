@@ -12,8 +12,7 @@ export function iconPath(size: number): string | undefined {
 let tray: Tray | null = null
 
 /**
- * Tray icon, so Letterwing keeps checking mail and showing reminders with the window closed (like
- * Classic in the notification area). On Linux this needs a tray (StatusNotifier) host: KDE, GNOME
+ * Tray icon, so Letterwing keeps checking mail and showing reminders with the window closed. On Linux this needs a tray (StatusNotifier) host: KDE, GNOME
  * with the AppIndicator extension, or waybar's tray module under Hyprland.
  */
 export function createTray(actions: { show(): void; newMessage(): void; sync(): void; quit(): void }): void {

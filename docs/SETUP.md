@@ -17,7 +17,7 @@ secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID` and `M
 1. Entra admin center → **App registrations → New registration**
    - Name: `Letterwing`
    - Supported account types: **Accounts in any organizational directory (multitenant)**. Pick
-     "...and personal Microsoft accounts" too if you want personal accounts as well.
+     "...and personal Microsoft accounts" too if you want personal accounts (e.g. @hotmail.com) as well.
    - Redirect URI: platform **Public client/native (mobile & desktop)**, URI `http://localhost`
      (Microsoft allows any port on localhost for this platform, which Letterwing needs).
 2. **Authentication** → *Allow public client flows*: **Yes**.
@@ -75,4 +75,4 @@ Common servers: Fastmail `imap.fastmail.com` / `smtp.fastmail.com`; iCloud `imap
 - **Subscriptions**: Settings → Calendars takes any `.ics` / `webcal://` link (public holidays etc.). Read-only.
 - **Answering invitations in mail**: Microsoft answers through Exchange. Elsewhere, if the event is already in
   your CalDAV calendar the answer goes through it; otherwise Letterwing emails a standard iCalendar reply to the
-  organizer, which Classic, Google and others understand. Like Classic, the answered invitation is then deleted.
+  organizer, which any standard calendar system understands. The answered invitation is then deleted.

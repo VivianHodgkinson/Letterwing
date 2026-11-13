@@ -372,7 +372,7 @@ const api: Api = {
   respondToEvent: (key, answer, comment) => calendar.respond(key, answer, comment),
   async respondToInvite(messageKey, answer, comment) {
     await calendar.respondToInvite(messageKey, answer, comment)
-    // Like Classic: an answered invitation leaves the inbox
+    // An answered invitation leaves the inbox
     await api.deleteMessages([messageKey]).catch(() => {})
   },
   syncCalendars: () => calendar.syncAll(),
@@ -428,7 +428,7 @@ app.on('second-instance', () => showWindow())
 
 app.whenReady().then(() => {
   // Electron's default menu owns Ctrl+R (reload), Ctrl+Q (quit on Linux), Ctrl+W and others, which would
-  // swallow Classic shortcuts such as Ctrl+Q "mark as read". All shortcuts go through the user's keymap instead.
+  // swallow mail shortcuts such as Ctrl+Q "mark as read". All shortcuts go through the user's keymap instead.
   // (macOS needs a menu for copy/paste, so it keeps one there.)
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   db.openDb()

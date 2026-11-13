@@ -21,7 +21,7 @@ assert.deepEqual(m.markUnread, ['Ctrl+U'])
 assert.deepEqual(findConflicts({ ...PRESETS.classic.keys, markRead: ['Ctrl+U'] }).map((c) => c.kind), ['same'])
 // G blocks every "G …" sequence: G I, G S, G M, G C
 assert.deepEqual(findConflicts({ ...PRESETS.singlekey.keys, toggleFlag: ['G'] }).map((c) => c.kind).sort(), ['prefix', 'prefix', 'prefix', 'prefix'])
-// The same key in mail and calendar is fine (single-key preset: J = next message / next week)...
+// The same key in mail and calendar is fine (single-key scheme: J = next message / next week)...
 assert.deepEqual(PRESETS.singlekey.keys.nextMessage.includes('J') && PRESETS.singlekey.keys.nextPeriod.includes('J'), true)
 // ...but a key bound in mail and also to an everywhere action clashes
 assert.deepEqual(findConflicts({ ...PRESETS.classic.keys, goToCalendar: ['Ctrl+R'] }).map((c) => [c.kind, c.actions.join('+')]), [['same', 'goToCalendar+reply']])

@@ -2,8 +2,8 @@
 
 <img src="docs/img/icon.png" width="96" align="right" alt="">
 
-A customisable desktop mail and calendar app for **Microsoft 365, Gmail and any IMAP account**: the parts of Classic
-worth keeping, without being stuck with it. Windows, macOS and Linux. Website: https://vivianhodgkinson.github.io/Letterwing/
+A customisable desktop mail and calendar app for **Microsoft 365, Google and any IMAP account**. Windows, macOS
+and Linux. Website: https://vivianhodgkinson.github.io/Letterwing/
 
 ![Letterwing](docs/img/mail.webp)
 
@@ -76,7 +76,7 @@ JSON box for any variable in `styles.css`. Reading pane right/bottom/off, three 
 Privacy: mail HTML is sanitised (DOMPurify) and shown in a sandboxed iframe with no scripts and its own CSP.
 Remote images (tracking pixels) are blocked until you click *Load images*.
 
-**Keyboard:** the classic shortcuts by default (`Ctrl+Q` read, `Ctrl+U` unread, `Insert` flag, `Ctrl+E`/`F3` search,
+**Keyboard:** the Classic scheme by default (`Ctrl+Q` read, `Ctrl+U` unread, `Insert` flag, `Ctrl+E`/`F3` search,
 `F9` send/receive, `Ctrl+.`/`Ctrl+,` next/previous...). Settings → Keyboard switches to the Single-key scheme or rebinds any
 action, including multi-key sequences like `G I`, with conflict warnings. Shortcuts live in `src/shared/keys.ts`: a new
 action is one entry in `ACTIONS` plus a handler in `App.tsx`. `F12` opens devtools.
