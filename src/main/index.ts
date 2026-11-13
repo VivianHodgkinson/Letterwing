@@ -14,6 +14,7 @@ import { signIn } from './oauth'
 import * as store from './store'
 import * as sync from './sync'
 import * as calendar from './calendar'
+import { detectProvider } from './signin'
 import { captureMode, runCapture, useProfileOverride } from './devcapture'
 
 useProfileOverride()
@@ -192,6 +193,7 @@ const api: Api = {
     if (/^(https?|mailto):/.test(url)) await shell.openExternal(url)
   },
 
+  detectProvider: (email) => detectProvider(email),
   async listAccounts() {
     return store.getAccounts()
   },

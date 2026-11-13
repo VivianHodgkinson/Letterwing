@@ -180,27 +180,26 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
             {accounts.map((a) => (
               <AccountSettings key={a.id} account={a} onChange={(patch) => onAccountChange(a.id, patch)} onRemove={() => onRemoveAccount(a.id)} />
             ))}
-            <h3>Sign-in apps</h3>
-            <div className="row">
-              <label className="grow">
-                Microsoft app (client) ID
-                <input
-                  value={settings.microsoftClientId}
-                  placeholder="from your Entra app registration"
-                  onChange={(e) => void onChange({ microsoftClientId: e.target.value.trim() })}
-                />
-              </label>
-            </div>
-            <div className="row">
-              <label className="grow">
-                Google OAuth client ID
-                <input value={settings.googleClientId} onChange={(e) => void onChange({ googleClientId: e.target.value.trim() })} />
-              </label>
-              <label className="grow">
-                Google client secret
-                <input type="password" value={settings.googleClientSecret} onChange={(e) => void onChange({ googleClientSecret: e.target.value.trim() })} />
-              </label>
-            </div>
+            <details className="advanced">
+              <summary>Advanced: use your own sign-in app registration</summary>
+              <p className="hint">Leave these empty to use the sign-in built into Inkwell. Only for testing a different Microsoft or Google app registration.</p>
+              <div className="row">
+                <label className="grow">
+                  Microsoft app (client) ID
+                  <input value={settings.microsoftClientId} onChange={(e) => void onChange({ microsoftClientId: e.target.value.trim() })} />
+                </label>
+              </div>
+              <div className="row">
+                <label className="grow">
+                  Google OAuth client ID
+                  <input value={settings.googleClientId} onChange={(e) => void onChange({ googleClientId: e.target.value.trim() })} />
+                </label>
+                <label className="grow">
+                  Google client secret
+                  <input type="password" value={settings.googleClientSecret} onChange={(e) => void onChange({ googleClientSecret: e.target.value.trim() })} />
+                </label>
+              </div>
+            </details>
           </>
         )}
 

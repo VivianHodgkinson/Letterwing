@@ -1,4 +1,4 @@
-import type { Account, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus } from './types'
+import type { Account, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus } from './types'
 
 /** Paging position in a message list: the last row shown */
 export interface Cursor {
@@ -16,6 +16,8 @@ export interface Api {
   openExternal(url: string): Promise<void>
 
   listAccounts(): Promise<Account[]>
+  /** Who hosts this address, and whether this build can sign in there */
+  detectProvider(email: string): Promise<{ kind: AccountKind; reason: string; signInAvailable: boolean; imap?: ServerSettings; smtp?: ServerSettings }>
   /** Tests the connection (and runs OAuth sign-in when needed) before saving */
   addAccount(account: NewAccount): Promise<Account>
   updateAccount(id: string, patch: Partial<Account>): Promise<Account>

@@ -1,8 +1,15 @@
 # Connecting accounts
 
-Inkwell signs in to Microsoft and Google with OAuth through your browser, so it never sees those passwords.
-Each provider needs an "app registration" once. The IDs go in **Settings → Accounts**; they are not secrets in the
-usual sense (desktop apps can't keep secrets), but don't commit them to a public repo anyway.
+People using Inkwell just type their email address and click **Sign in with Google / Microsoft**. For that to work,
+whoever builds Inkwell registers a sign-in app with Google and Microsoft **once**, and puts the IDs in `.env.local`
+(git-ignored; copy `.env.example`). They are built into the app; nobody else ever sees a client-ID box.
+(Settings → Accounts → *Advanced* can override them, for testing another registration.)
+
+Desktop apps can't keep secrets, so these IDs identify the app rather than protect anything: sign-in is protected by
+PKCE, the user's own Google/Microsoft login (with MFA), and tokens kept in the OS keyring. Still, keep them out of
+public repositories.
+
+After editing `.env.local`, restart `npm run dev` (or rebuild).
 
 ## Microsoft 365 / Exchange Online / personal Microsoft accounts
 
@@ -15,26 +22,39 @@ usual sense (desktop apps can't keep secrets), but don't commit them to a public
 2. **Authentication** → *Allow public client flows*: **Yes**.
 3. **API permissions** → Microsoft Graph → Delegated: `offline_access`, `User.Read`, `Mail.ReadWrite`,
    `Mail.Send`, `Calendars.ReadWrite`.
-4. Copy the **Application (client) ID** into Settings → *Microsoft app (client) ID*.
+4. Put the **Application (client) ID** in `.env.local` as `MAIN_VITE_MICROSOFT_CLIENT_ID`. Use `MAIN_VITE_MICROSOFT_TENANT=common`
+   if you ticked personal Microsoft accounts too, otherwise leave it as `organizations`.
 5. In each **other** tenant (Vital, iMas, ...): the first sign-in as an admin shows a consent prompt. Tick
    *Consent on behalf of your organization* so other users there aren't blocked. Or grant it ahead of time:
    `https://login.microsoftonline.com/<tenant-domain>/adminconsent?client_id=<client-id>`
 
-When adding the account, set *Tenant* to that tenant's domain (e.g. `contoso.co.za`) or leave `organizations`.
 
 ## Google / Gmail
 
-1. Google Cloud console → new project → **APIs & Services → Enable** *Gmail API*, *Google Calendar API* and
-   *CalDAV API* (Inkwell reads Google calendars over CalDAV).
-2. **OAuth consent screen**: *Internal* if all accounts are in one Workspace org; otherwise *External* and add
-   yourself as a test user. Scopes: `https://mail.google.com/`, `.../auth/calendar`, `openid`, `email`.
-   - Note: External apps left in *Testing* mode get refresh tokens that expire after 7 days, so you'll have to
-     sign in again weekly. Publishing the app (unverified is fine for personal use) avoids that.
-3. **Credentials → Create OAuth client ID → Desktop app.** Copy the client ID and secret into Settings.
+1. [Google Cloud console](https://console.cloud.google.com/) → create a project (e.g. "Inkwell").
+2. **APIs & Services → Library**: enable *Gmail API*, *Google Calendar API* and *CalDAV API*.
+3. **Google Auth Platform → Branding / Audience** (the OAuth consent screen):
+   - App name `Inkwell`, your support email.
+   - **Audience** – this is the important choice:
+     - **Internal**: only if every account is in *one* Google Workspace organisation that owns this project. No
+       verification, no warnings, no limits. Not possible for personal @gmail.com accounts.
+     - **External**: needed for @gmail.com (or several organisations). Full mailbox access is a *restricted* scope,
+       so Google wants a paid security review before it lets the general public in. For yourself and colleagues you
+       don't need that:
+       - *Testing*: add each person under **Test users** (up to 100). They see a "Google hasn't verified this app"
+         screen once. **Sign-ins expire after 7 days** in this mode, so people re-sign weekly.
+       - *In production, unverified*: click **Publish app** and skip verification. Same warning screen, up to 100
+         users, but sign-ins don't expire. This is the practical choice for a small team.
+4. **Data access → Add scopes**: `https://mail.google.com/`, `https://www.googleapis.com/auth/calendar`, `openid`,
+   `email`.
+5. **Clients → Create client → Desktop app**, name `Inkwell`. Put the client ID and secret in `.env.local` as
+   `MAIN_VITE_GOOGLE_CLIENT_ID` and `MAIN_VITE_GOOGLE_CLIENT_SECRET`. (Google calls it a secret, but for Desktop
+   clients it's documented as not confidential; PKCE is what protects the sign-in.)
 
 ## Anything else (IMAP/SMTP)
 
-Choose *Other (IMAP)*, enter the server details and password. The password is encrypted with your system
+Addresses that aren't Google or Microsoft (detected from the domain and its MX records) ask for a password, with
+server settings filled in where known. The password is encrypted with your system
 keyring (KWallet on Plasma, GNOME Keyring elsewhere). If neither is running, Inkwell refuses to save it rather
 than storing it in plain text.
 

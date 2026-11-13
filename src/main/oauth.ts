@@ -3,7 +3,8 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Account } from '@shared/types'
-import { getSecret, getSettings, setSecret } from './store'
+import { oauthClients } from './signin'
+import { getSecret, setSecret } from './store'
 
 /**
  * OAuth 2.0 for desktop apps: authorization code + PKCE, signing in through
@@ -27,11 +28,11 @@ export interface TokenSet {
 }
 
 function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>): Provider {
-  const s = getSettings()
+  const built = oauthClients()
   if (account.kind === 'microsoft') {
-    const tenant = account.tenant || 'organizations'
-    const clientId = account.clientId || s.microsoftClientId
-    if (!clientId) throw new Error('Set the Microsoft app (client) ID in Settings → Accounts first. See docs/SETUP.md.')
+    const tenant = account.tenant || built.microsoft.tenant
+    const clientId = account.clientId || built.microsoft.clientId
+    if (!clientId) throw new Error("This copy of Inkwell wasn't built with Microsoft sign-in. Whoever builds it adds it once (docs/SETUP.md).")
     return {
       authorize: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
       token: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
@@ -41,15 +42,15 @@ function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>): Provi
     }
   }
   if (account.kind === 'google') {
-    const clientId = account.clientId || s.googleClientId
-    if (!clientId) throw new Error('Set the Google OAuth client ID in Settings → Accounts first. See docs/SETUP.md.')
+    const clientId = account.clientId || built.google.clientId
+    if (!clientId) throw new Error("This copy of Inkwell wasn't built with Google sign-in. Whoever builds it adds it once (docs/SETUP.md).")
     return {
       authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
       token: 'https://oauth2.googleapis.com/token',
       scopes: ['https://mail.google.com/', 'https://www.googleapis.com/auth/calendar', 'openid', 'email'],
       clientId,
       // Google issues "installed app" clients with a secret that isn't actually secret; PKCE is what protects the flow.
-      clientSecret: s.googleClientSecret || undefined,
+      clientSecret: built.google.clientSecret || undefined,
       extra: { access_type: 'offline', prompt: 'consent' }
     }
   }

@@ -2,3 +2,7 @@ node_modules
 out
 dist
 *.log
+
+# Built-in sign-in app IDs (see .env.example)
+.env.local
+.env.*.local
