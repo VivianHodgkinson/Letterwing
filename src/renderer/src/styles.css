@@ -354,3 +354,6 @@ kbd { font: 11.5px ui-monospace, monospace; background: var(--bg-3); border: 1px
 /* Update button in the top bar */
 .update-pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .update-pill.quiet { background: var(--accent-soft); color: var(--accent); }
+
+/* Account heading shows the email address: keep its case */
+.account-head .aname { text-transform: none; letter-spacing: 0; font-size: 12.5px; }

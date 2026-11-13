@@ -37,8 +37,9 @@ export function Sidebar({ accounts, folders, status, view, onView, onAddAccount,
           <section key={a.id} className="account" style={{ ['--acct' as string]: a.color }}>
             <button className="account-head" onClick={() => setCollapsed((c) => ({ ...c, [a.id]: !c[a.id] }))}>
               <span className="badge">{a.label}</span>
-              <span className="aname" title={a.email}>
-                {a.name}
+              {/* The address tells accounts apart (three Gmail accounts would all be called "Gmail") */}
+              <span className="aname" title={a.name}>
+                {a.email}
               </span>
               <span className={`dot ${st?.state ?? 'idle'}`} title={st?.message ?? st?.state ?? ''} />
             </button>
