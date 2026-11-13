@@ -37,6 +37,8 @@ export interface Account {
   signature?: string
   /** Also add the signature to replies and forwards (the classic second signature setting) */
   signatureOnReplies?: boolean
+  /** CalDAV server for IMAP accounts (Fastmail, iCloud, Nextcloud...). Microsoft and Google accounts don't need it. */
+  caldavUrl?: string
 }
 
 /** What the renderer sends to create an account. The secret goes to the keyring, never to disk in plain text. */
@@ -106,7 +108,99 @@ export interface MessageBody {
   messageId: string
   references: string[]
   replyTo: Address[]
+  /** Set when the message is a meeting invitation, update or cancellation */
+  invite?: Invite
 }
+
+export type ResponseStatus = 'accepted' | 'tentative' | 'declined' | 'needsAction' | 'organizer' | 'none'
+
+export interface Attendee extends Address {
+  status: ResponseStatus
+  optional?: boolean
+}
+
+export interface CalendarInfo {
+  accountId: string
+  id: string
+  name: string
+  color: string
+  readOnly: boolean
+  isDefault: boolean
+}
+
+/** One occurrence on the calendar. A repeating meeting appears once per occurrence. */
+export interface CalendarEvent {
+  key: string
+  accountId: string
+  calendarId: string
+  /** Graph: the occurrence's event ID. CalDAV: the URL of the calendar object (shared by every occurrence of a series). */
+  remoteId: string
+  /** Graph: the series master, for responding to a whole series */
+  seriesId?: string
+  uid: string
+  title: string
+  start: number
+  end: number
+  allDay: boolean
+  location: string
+  description: string
+  organizer: Address | null
+  attendees: Attendee[]
+  myStatus: ResponseStatus
+  isOrganizer: boolean
+  recurring: boolean
+  cancelled: boolean
+  showAs: 'free' | 'tentative' | 'busy' | 'oof' | 'elsewhere'
+  /** Teams / Zoom / Meet link when there is one */
+  joinUrl?: string
+}
+
+export type Repeat = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly'
+
+/** What the event editor sends to create or change an event */
+export interface EventInput {
+  accountId: string
+  calendarId: string
+  /** Set when editing */
+  key?: string
+  title: string
+  start: number
+  end: number
+  allDay: boolean
+  location: string
+  description: string
+  attendees: Address[]
+  repeat: Repeat
+  /** Microsoft 365: make it a Teams meeting */
+  online: boolean
+}
+
+/** A meeting request, update, reply or cancellation found in a message */
+export interface Invite {
+  method: 'REQUEST' | 'CANCEL' | 'REPLY' | 'COUNTER' | 'PUBLISH' | 'OTHER'
+  uid: string
+  title: string
+  start: number
+  end: number
+  allDay: boolean
+  location: string
+  organizer: Address | null
+  myStatus: ResponseStatus
+  recurring: boolean
+  /** Graph: the event in your calendar to respond to */
+  eventId?: string
+  /** iCalendar text, for replying by email (iMIP) on servers without a calendar API */
+  ics?: string
+}
+
+export interface IcsSubscription {
+  id: string
+  name: string
+  url: string
+  color: string
+}
+
+export type CalendarView = 'day' | 'workweek' | 'week' | 'month'
 
 /** A file to send: from disk, or an attachment of an existing message (forwarding, reopened drafts) */
 export interface OutgoingAttachment {
@@ -155,6 +249,16 @@ export interface Settings {
   keymapPreset: PresetId
   /** Per-action overrides on top of the preset. [] unbinds an action. */
   keybindings: Partial<Keymap>
+  /** Read-only calendars from an ICS / webcal link (holidays, sports fixtures, other people's shared calendars) */
+  icsSubscriptions: IcsSubscription[]
+  /** Calendars unticked in the calendar sidebar, as "accountId\u0000calendarId" */
+  hiddenCalendars: string[]
+  calendarView: CalendarView
+  /** Working hours: the time grid scrolls here and shades the rest */
+  workDayStart: number
+  workDayEnd: number
+  /** Minutes before an event to show a reminder; 0 turns reminders off */
+  reminderMinutes: number
   /** Minutes between background syncs */
   syncInterval: number
   /** Default OAuth client IDs; per-account overrides live on the account */

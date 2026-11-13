@@ -36,11 +36,26 @@ export type ActionId =
   | 'openSettings'
   | 'addAccount'
   | 'loadImages'
+  | 'goToMail'
+  | 'goToCalendar'
+  | 'newEvent'
+  | 'calendarDay'
+  | 'calendarWorkWeek'
+  | 'calendarWeek'
+  | 'calendarMonth'
+  | 'prevPeriod'
+  | 'nextPeriod'
+  | 'goToToday'
 
 export interface ActionInfo {
   id: ActionId
   label: string
-  group: 'Navigate' | 'Message' | 'Compose' | 'Search' | 'App'
+  group: 'Navigate' | 'Message' | 'Compose' | 'Search' | 'Calendar' | 'App'
+  /**
+   * Where the action works. Actions in different scopes may share a key (J is "next message" in
+   * mail and "next week" in the calendar, as in Gmail and Google Calendar). Unset means everywhere.
+   */
+  scope?: 'mail' | 'calendar'
   /**
    * Can fire while focus is in a text field (only for combos with Ctrl/Alt/Meta, F-keys or Escape).
    * Off for anything that acts on the message list, so Ctrl+A in the editor still selects text.
@@ -50,30 +65,40 @@ export interface ActionInfo {
 
 /** Every bindable action. New features add an entry here and a handler in the renderer. */
 export const ACTIONS: ActionInfo[] = [
-  { id: 'nextMessage', label: 'Next message', group: 'Navigate' },
-  { id: 'prevMessage', label: 'Previous message', group: 'Navigate' },
-  { id: 'firstMessage', label: 'First message', group: 'Navigate' },
-  { id: 'lastMessage', label: 'Last message', group: 'Navigate' },
-  { id: 'selectAll', label: 'Select all messages', group: 'Navigate' },
-  { id: 'openMessage', label: 'Open (edit a draft)', group: 'Navigate' },
-  { id: 'goInbox', label: 'Go to all inboxes', group: 'Navigate', whileTyping: true },
-  { id: 'markRead', label: 'Mark as read', group: 'Message' },
-  { id: 'markUnread', label: 'Mark as unread', group: 'Message' },
-  { id: 'toggleRead', label: 'Toggle read / unread', group: 'Message' },
-  { id: 'toggleFlag', label: 'Flag / unflag', group: 'Message' },
-  { id: 'reply', label: 'Reply', group: 'Message' },
-  { id: 'replyAll', label: 'Reply all', group: 'Message' },
-  { id: 'forward', label: 'Forward', group: 'Message' },
-  { id: 'delete', label: 'Delete', group: 'Message' },
-  { id: 'archive', label: 'Archive', group: 'Message' },
-  { id: 'moveToFolder', label: 'Move to folder…', group: 'Message' },
-  { id: 'loadImages', label: 'Load remote images', group: 'Message' },
-  { id: 'newMessage', label: 'New message', group: 'Compose', whileTyping: true },
+  { id: 'nextMessage', label: 'Next message', group: 'Navigate', scope: 'mail' },
+  { id: 'prevMessage', label: 'Previous message', group: 'Navigate', scope: 'mail' },
+  { id: 'firstMessage', label: 'First message', group: 'Navigate', scope: 'mail' },
+  { id: 'lastMessage', label: 'Last message', group: 'Navigate', scope: 'mail' },
+  { id: 'selectAll', label: 'Select all messages', group: 'Navigate', scope: 'mail' },
+  { id: 'openMessage', label: 'Open (edit a draft)', group: 'Navigate', scope: 'mail' },
+  { id: 'goInbox', label: 'Go to all inboxes', group: 'Navigate', whileTyping: true, scope: 'mail' },
+  { id: 'markRead', label: 'Mark as read', group: 'Message', scope: 'mail' },
+  { id: 'markUnread', label: 'Mark as unread', group: 'Message', scope: 'mail' },
+  { id: 'toggleRead', label: 'Toggle read / unread', group: 'Message', scope: 'mail' },
+  { id: 'toggleFlag', label: 'Flag / unflag', group: 'Message', scope: 'mail' },
+  { id: 'reply', label: 'Reply', group: 'Message', scope: 'mail' },
+  { id: 'replyAll', label: 'Reply all', group: 'Message', scope: 'mail' },
+  { id: 'forward', label: 'Forward', group: 'Message', scope: 'mail' },
+  { id: 'delete', label: 'Delete', group: 'Message', scope: 'mail' },
+  { id: 'archive', label: 'Archive', group: 'Message', scope: 'mail' },
+  { id: 'moveToFolder', label: 'Move to folder…', group: 'Message', scope: 'mail' },
+  { id: 'loadImages', label: 'Load remote images', group: 'Message', scope: 'mail' },
+  { id: 'newMessage', label: 'New message', group: 'Compose', whileTyping: true, scope: 'mail' },
   { id: 'send', label: 'Send', group: 'Compose', whileTyping: true },
   { id: 'saveDraft', label: 'Save draft', group: 'Compose', whileTyping: true },
   { id: 'closeCompose', label: 'Close message (keeps draft)', group: 'Compose', whileTyping: true },
-  { id: 'search', label: 'Search', group: 'Search', whileTyping: true },
-  { id: 'clearSearch', label: 'Clear search', group: 'Search', whileTyping: true },
+  { id: 'search', label: 'Search', group: 'Search', whileTyping: true, scope: 'mail' },
+  { id: 'clearSearch', label: 'Clear search', group: 'Search', whileTyping: true, scope: 'mail' },
+  { id: 'newEvent', label: 'New event', group: 'Calendar', scope: 'calendar', whileTyping: true },
+  { id: 'calendarDay', label: 'Day view', group: 'Calendar', scope: 'calendar' },
+  { id: 'calendarWorkWeek', label: 'Work week view', group: 'Calendar', scope: 'calendar' },
+  { id: 'calendarWeek', label: 'Week view', group: 'Calendar', scope: 'calendar' },
+  { id: 'calendarMonth', label: 'Month view', group: 'Calendar', scope: 'calendar' },
+  { id: 'prevPeriod', label: 'Previous day / week / month', group: 'Calendar', scope: 'calendar' },
+  { id: 'nextPeriod', label: 'Next day / week / month', group: 'Calendar', scope: 'calendar' },
+  { id: 'goToToday', label: 'Go to today', group: 'Calendar', scope: 'calendar' },
+  { id: 'goToMail', label: 'Switch to Mail', group: 'App', whileTyping: true },
+  { id: 'goToCalendar', label: 'Switch to Calendar', group: 'App', whileTyping: true },
   { id: 'syncAll', label: 'Send / receive all', group: 'App', whileTyping: true },
   { id: 'openSettings', label: 'Settings', group: 'App' },
   { id: 'addAccount', label: 'Add account', group: 'App' }
@@ -112,7 +137,18 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       clearSearch: ['Escape'],
       syncAll: ['F9'],
       openSettings: [],
-      addAccount: []
+      addAccount: [],
+      goToMail: ['Ctrl+1'],
+      goToCalendar: ['Ctrl+2'],
+      newEvent: ['Ctrl+N', 'Ctrl+Shift+A'],
+      calendarDay: ['Ctrl+Alt+1'],
+      calendarWorkWeek: ['Ctrl+Alt+2'],
+      calendarWeek: ['Ctrl+Alt+3'],
+      calendarMonth: ['Ctrl+Alt+4'],
+      prevPeriod: ['Alt+Up', 'Left'],
+      nextPeriod: ['Alt+Down', 'Right'],
+      // Classic has no single key for this (it's on the ribbon); T matches Google Calendar
+      goToToday: ['T']
     }
   },
   singlekey: {
@@ -144,7 +180,18 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       clearSearch: ['Escape'],
       syncAll: [],
       openSettings: ['G S'],
-      addAccount: []
+      addAccount: [],
+      goToMail: ['G M'],
+      goToCalendar: ['G C'],
+      // single-key calendar keys
+      newEvent: ['C'],
+      calendarDay: ['D'],
+      calendarWorkWeek: ['X'],
+      calendarWeek: ['W'],
+      calendarMonth: ['M'],
+      prevPeriod: ['K', 'P'],
+      nextPeriod: ['J', 'N'],
+      goToToday: ['T']
     }
   }
 }
@@ -180,14 +227,25 @@ export interface Conflict {
 }
 
 export function findConflicts(map: Keymap): Conflict[] {
-  const owners = new Map<string, ActionId[]>()
-  for (const [action, list] of Object.entries(map) as [ActionId, string[]][])
-    for (const b of list) owners.set(normaliseBinding(b), [...(owners.get(normaliseBinding(b)) ?? []), action])
+  const scopeOf = new Map(ACTIONS.map((a) => [a.id, a.scope]))
+  // Two actions clash only if they can be active at the same time
+  const overlap = (a: ActionId, b: ActionId) => {
+    const x = scopeOf.get(a)
+    const y = scopeOf.get(b)
+    return !x || !y || x === y
+  }
+  const entries = (Object.entries(map) as [ActionId, string[]][]).flatMap(([action, list]) => list.map((b) => ({ action, binding: normaliseBinding(b) })))
   const out: Conflict[] = []
-  for (const [binding, actions] of owners) if (actions.length > 1) out.push({ binding, actions, kind: 'same' })
-  const all = [...owners.keys()]
-  for (const short of all)
-    for (const long of all)
-      if (long !== short && long.startsWith(short + ' ')) out.push({ binding: long, actions: [...owners.get(short)!, ...owners.get(long)!], kind: 'prefix' })
+  const seen = new Set<string>()
+  for (const a of entries)
+    for (const b of entries) {
+      if (a.action === b.action || !overlap(a.action, b.action)) continue
+      const kind = a.binding === b.binding ? 'same' : b.binding.startsWith(a.binding + ' ') ? 'prefix' : null
+      if (!kind) continue
+      const id = kind === 'same' ? [a.binding, ...[a.action, b.action].sort()].join('|') : `${b.binding}|${a.action}|${b.action}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      out.push({ binding: kind === 'same' ? a.binding : b.binding, actions: kind === 'same' ? [a.action, b.action].sort() : [a.action, b.action], kind })
+    }
   return out
 }

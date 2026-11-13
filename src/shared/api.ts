@@ -1,4 +1,4 @@
-import type { Account, Contact, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus } from './types'
+import type { Account, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus } from './types'
 
 /** Paging position in a message list: the last row shown */
 export interface Cursor {
@@ -51,6 +51,16 @@ export interface Api {
   discardDraft(message: Outgoing): Promise<void>
   /** Reopen a message from Drafts for editing */
   openDraft(key: string): Promise<Outgoing>
+
+  // calendar
+  listCalendars(): Promise<CalendarInfo[]>
+  listEvents(from: number, to: number): Promise<CalendarEvent[]>
+  saveEvent(input: EventInput): Promise<void>
+  deleteEvent(key: string): Promise<void>
+  respondToEvent(key: string, answer: 'accepted' | 'tentative' | 'declined', comment?: string): Promise<void>
+  /** Answer the invitation in a message; the message then moves to Deleted Items, like Classic */
+  respondToInvite(messageKey: string, answer: 'accepted' | 'tentative' | 'declined', comment?: string): Promise<void>
+  syncCalendars(): Promise<void>
 }
 
 export type ApiMethod = keyof Api
@@ -58,5 +68,5 @@ export type ApiMethod = keyof Api
 export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: string }
 
 /** Push events from main to renderer */
-export type EventChannel = 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message'
+export type EventChannel = 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message' | 'calendar:changed' | 'open:event'
 export type SyncEvent = SyncStatus

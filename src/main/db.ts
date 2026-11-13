@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
-import type { Address, Contact, Folder, FolderRole, MessageBody, MessageSummary } from '@shared/types'
+import type { Address, CalendarEvent, CalendarInfo, Contact, Folder, FolderRole, MessageBody, MessageSummary } from '@shared/types'
+import type { RemoteEvent } from './ical'
 import type { FolderSync, RemoteSummary } from './connectors/types'
 import { dataDir } from './store'
 
@@ -11,7 +12,7 @@ import { dataDir } from './store'
  */
 let db: DatabaseSync
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 export function openDb(path = join(dataDir(), 'mail.db')): void {
   db = new DatabaseSync(path)
@@ -48,6 +49,22 @@ function migrate(): void {
       CREATE INDEX IF NOT EXISTS messages_folder_thread ON messages (account_id, folder_id, thread_id, date);
       CREATE TABLE IF NOT EXISTS contacts (address TEXT PRIMARY KEY, name TEXT NOT NULL, score REAL NOT NULL, last INTEGER NOT NULL);
       UPDATE folders SET sync_state = NULL;
+    `)
+  }
+  if (version < 3) {
+    // v3: calendars. Events are cached per occurrence for the synced window.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS calendars (
+        account_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL,
+        read_only INTEGER NOT NULL, is_default INTEGER NOT NULL, synced_from INTEGER, synced_to INTEGER,
+        PRIMARY KEY (account_id, id)
+      );
+      CREATE TABLE IF NOT EXISTS events (
+        key TEXT PRIMARY KEY, account_id TEXT NOT NULL, calendar_id TEXT NOT NULL,
+        start INTEGER NOT NULL, end INTEGER NOT NULL, uid TEXT NOT NULL, json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS events_range ON events (start, end);
+      CREATE INDEX IF NOT EXISTS events_uid ON events (account_id, uid);
     `)
   }
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
@@ -340,6 +357,76 @@ export function restoreLocal(items: { message: MessageSummary; body: MessageBody
 
 export function removeAccountData(accountId: string): void {
   for (const f of listFolders(accountId)) dropFolder(accountId, f.id)
+  db.prepare('DELETE FROM events WHERE account_id = ?').run(accountId)
+  db.prepare('DELETE FROM calendars WHERE account_id = ?').run(accountId)
+}
+
+// ---------------------------------------------------------------- calendars
+
+export function saveCalendars(accountId: string, calendars: Omit<CalendarInfo, 'accountId'>[]): void {
+  const keep = new Set(calendars.map((c) => c.id))
+  tx(() => {
+    const up = db.prepare(`INSERT INTO calendars (account_id, id, name, color, read_only, is_default) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (account_id, id) DO UPDATE SET name = excluded.name, color = excluded.color, read_only = excluded.read_only, is_default = excluded.is_default`)
+    for (const c of calendars) up.run(accountId, c.id, c.name, c.color, c.readOnly ? 1 : 0, c.isDefault ? 1 : 0)
+    for (const r of db.prepare('SELECT id FROM calendars WHERE account_id = ?').all(accountId) as Row[])
+      if (!keep.has(r.id as string)) {
+        db.prepare('DELETE FROM events WHERE account_id = ? AND calendar_id = ?').run(accountId, r.id as string)
+        db.prepare('DELETE FROM calendars WHERE account_id = ? AND id = ?').run(accountId, r.id as string)
+      }
+  })
+}
+
+export function listCalendars(): (CalendarInfo & { syncedFrom: number | null; syncedTo: number | null })[] {
+  return (db.prepare('SELECT * FROM calendars ORDER BY account_id, is_default DESC, name COLLATE NOCASE').all() as Row[]).map((r) => ({
+    accountId: r.account_id as string,
+    id: r.id as string,
+    name: r.name as string,
+    color: r.color as string,
+    readOnly: !!r.read_only,
+    isDefault: !!r.is_default,
+    syncedFrom: (r.synced_from as number) ?? null,
+    syncedTo: (r.synced_to as number) ?? null
+  }))
+}
+
+export const eventKey = (accountId: string, calendarId: string, remoteId: string, start: number): string =>
+  `${accountId}\u0000${calendarId}\u0000${remoteId}\u0000${start}`
+
+export function toCalendarEvent(accountId: string, calendarId: string, e: RemoteEvent): CalendarEvent {
+  return { ...e, key: eventKey(accountId, calendarId, e.remoteId, e.start), accountId, calendarId }
+}
+
+/** Replace a calendar's events for the window just synced */
+export function saveEvents(accountId: string, calendarId: string, from: number, to: number, events: RemoteEvent[]): void {
+  tx(() => {
+    db.prepare('DELETE FROM events WHERE account_id = ? AND calendar_id = ?').run(accountId, calendarId)
+    const ins = db.prepare('INSERT OR REPLACE INTO events (key, account_id, calendar_id, start, end, uid, json) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    for (const e of events) {
+      const full = toCalendarEvent(accountId, calendarId, e)
+      ins.run(full.key, accountId, calendarId, e.start, e.end, e.uid, JSON.stringify(full))
+    }
+    db.prepare('UPDATE calendars SET synced_from = ?, synced_to = ? WHERE account_id = ? AND id = ?').run(from, to, accountId, calendarId)
+  })
+}
+
+export function listEvents(from: number, to: number): CalendarEvent[] {
+  return (db.prepare('SELECT json FROM events WHERE start < ? AND end > ? ORDER BY start').all(to, from) as Row[]).map((r) => JSON.parse(r.json as string))
+}
+
+export function getEvent(key: string): CalendarEvent | null {
+  const r = db.prepare('SELECT json FROM events WHERE key = ?').get(key) as Row | undefined
+  return r ? JSON.parse(r.json as string) : null
+}
+
+export function eventByUid(accountId: string, uid: string): CalendarEvent | null {
+  const r = db.prepare('SELECT json FROM events WHERE account_id = ? AND uid = ? ORDER BY start LIMIT 1').get(accountId, uid) as Row | undefined
+  return r ? JSON.parse(r.json as string) : null
+}
+
+/** Events starting in [from, to), for reminders */
+export function eventsStarting(from: number, to: number): CalendarEvent[] {
+  return (db.prepare('SELECT json FROM events WHERE start >= ? AND start < ? ORDER BY start').all(from, to) as Row[]).map((r) => JSON.parse(r.json as string))
 }
 
 // ---------------------------------------------------------------- contacts

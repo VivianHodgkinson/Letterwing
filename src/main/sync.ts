@@ -118,7 +118,13 @@ export async function syncAll(): Promise<void> {
   await Promise.all(getAccounts().map((a) => syncAccount(a)))
 }
 
+let afterCycle: () => void = () => {}
+/** Something to run after each scheduled sync (the calendar refresh) */
+export function onCycle(fn: () => void): void {
+  afterCycle = fn
+}
+
 export function schedule(minutes: number): void {
   if (timer) clearInterval(timer)
-  timer = setInterval(() => void syncAll(), Math.max(1, minutes) * 60_000)
+  timer = setInterval(() => void syncAll().then(() => afterCycle()), Math.max(1, minutes) * 60_000)
 }

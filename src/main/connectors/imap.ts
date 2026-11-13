@@ -1,7 +1,8 @@
 import { ImapFlow, type FetchMessageObject, type ListResponse, type MessageStructureObject } from 'imapflow'
 import { simpleParser, type AddressObject, type ParsedMail } from 'mailparser'
 import nodemailer from 'nodemailer'
-import type { Account, Address, FolderRole } from '@shared/types'
+import type { Account, Address, FolderRole, Invite } from '@shared/types'
+import { parseInvite } from '../ical'
 import type { AttachmentData, CompiledMessage, FolderSync, MailConnector, RemoteSummary } from './types'
 
 type Auth = { pass: string } | { accessToken: string }
@@ -177,7 +178,19 @@ export class ImapConnector implements MailConnector {
         html = html!.replace(re, `data:${a.contentType};base64,${a.content.toString('base64')}`)
         embedded.add(i)
       })
+    // Meeting invitations, updates and cancellations carry a text/calendar part
+    let invite: Invite | undefined
+    const calIndex = p.attachments.findIndex((a) => a.contentType === 'text/calendar' || /\.ics$/i.test(a.filename ?? ''))
+    if (calIndex >= 0) {
+      try {
+        invite = parseInvite(p.attachments[calIndex].content.toString('utf8'), this.account.email) ?? undefined
+        if (invite) embedded.add(calIndex) // shown as the invite card, not as a file
+      } catch {
+        // Not a calendar we can read: leave it as a plain attachment
+      }
+    }
     return {
+      ...(invite ? { invite } : {}),
       html,
       text: p.text ?? null,
       cc: flatten(p.cc),

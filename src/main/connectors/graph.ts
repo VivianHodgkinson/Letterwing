@@ -1,4 +1,4 @@
-import type { Account, Address, FolderRole } from '@shared/types'
+import type { Account, Address, FolderRole, Invite } from '@shared/types'
 import type { AttachmentData, CompiledMessage, FolderSync, MailConnector, RemoteSummary } from './types'
 
 const GRAPH = 'https://graph.microsoft.com/v1.0'
@@ -44,7 +44,7 @@ export class GraphConnector implements MailConnector {
     private token: () => Promise<string>
   ) {}
 
-  private async request(url: string, init: RequestInit = {}): Promise<Response> {
+  async request(url: string, init: RequestInit = {}): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(url.startsWith('http') ? url : GRAPH + url, {
         ...init,
@@ -63,7 +63,7 @@ export class GraphConnector implements MailConnector {
     }
   }
 
-  private async call<T>(url: string, init: RequestInit = {}): Promise<T> {
+  async call<T>(url: string, init: RequestInit = {}): Promise<T> {
     const res = await this.request(url, init)
     return res.status === 204 || res.status === 202 ? (undefined as T) : ((await res.json()) as T)
   }
@@ -158,6 +158,7 @@ export class GraphConnector implements MailConnector {
 
   async fetchBody(_folderId: string, remoteId: string) {
     type B = {
+      '@odata.type'?: string
       body: { contentType: 'html' | 'text'; content: string }
       ccRecipients: { emailAddress: { name: string; address: string } }[]
       replyTo: { emailAddress: { name: string; address: string } }[]
@@ -184,7 +185,9 @@ export class GraphConnector implements MailConnector {
       }
     }
     const refs = m.internetMessageHeaders?.find((h) => h.name.toLowerCase() === 'references')?.value.match(/<[^>]+>/g) ?? []
+    const invite = m['@odata.type']?.includes('eventMessage') ? await this.invite(remoteId).catch(() => undefined) : undefined
     return {
+      ...(invite ? { invite } : {}),
       html,
       text: m.body.contentType === 'text' ? m.body.content : null,
       cc: m.ccRecipients.map(toAddr),
@@ -199,6 +202,56 @@ export class GraphConnector implements MailConnector {
       messageId: m.internetMessageId ?? '',
       references: refs,
       replyTo: (m.replyTo ?? []).map(toAddr)
+    }
+  }
+
+  /** A meeting request/cancellation and the event it put in the calendar */
+  private async invite(remoteId: string): Promise<Invite | undefined> {
+    type T = { dateTime: string; timeZone: string }
+    type E = {
+      meetingMessageType?: string
+      event?: {
+        id: string
+        iCalUId: string
+        subject?: string
+        start: T
+        end: T
+        isAllDay: boolean
+        location?: { displayName?: string }
+        organizer?: { emailAddress: { name: string; address: string } }
+        responseStatus?: { response: string }
+        type: string
+        seriesMasterId?: string
+      }
+    }
+    const m = await this.call<E>(
+      `/me/messages/${remoteId}?$select=meetingMessageType&$expand=microsoft.graph.eventMessage/event($select=id,iCalUId,subject,start,end,isAllDay,location,organizer,responseStatus,type,seriesMasterId)`,
+      { headers: { Prefer: 'outlook.timezone="UTC"' } }
+    )
+    const e = m.event
+    if (!e) return undefined
+    const time = (t: T) => {
+      if (e.isAllDay) {
+        const [y, mo, d] = t.dateTime.slice(0, 10).split('-').map(Number)
+        return new Date(y, mo - 1, d).getTime()
+      }
+      return Date.parse(t.dateTime.endsWith('Z') ? t.dateTime : t.dateTime + 'Z')
+    }
+    const method: Record<string, Invite['method']> = { meetingRequest: 'REQUEST', meetingCancelled: 'CANCEL', meetingAccepted: 'REPLY', meetingTenativelyAccepted: 'REPLY', meetingDeclined: 'REPLY' }
+    const status: Record<string, Invite['myStatus']> = { accepted: 'accepted', tentativelyAccepted: 'tentative', declined: 'declined', notResponded: 'needsAction', organizer: 'organizer' }
+    return {
+      method: method[m.meetingMessageType ?? ''] ?? 'OTHER',
+      uid: e.iCalUId,
+      title: e.subject || '(no title)',
+      start: time(e.start),
+      end: time(e.end),
+      allDay: e.isAllDay,
+      location: e.location?.displayName ?? '',
+      organizer: e.organizer ? { name: e.organizer.emailAddress.name, address: e.organizer.emailAddress.address } : null,
+      myStatus: status[e.responseStatus?.response ?? ''] ?? 'none',
+      recurring: e.type !== 'singleInstance',
+      // Answer the series when the invite is for one
+      eventId: e.seriesMasterId ?? e.id
     }
   }
 
@@ -287,7 +340,7 @@ export class GraphConnector implements MailConnector {
   async close(): Promise<void> {}
 }
 
-class GraphError extends Error {
+export class GraphError extends Error {
   constructor(
     public status: number,
     public code: string,

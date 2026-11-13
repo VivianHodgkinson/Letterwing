@@ -319,7 +319,7 @@ export function parseAddresses(text: string): Address[] {
     })
 }
 
-function RecipientField({ label, value, onChange, extra }: { label: string; value: Address[]; onChange(v: Address[]): void; extra?: React.ReactNode }) {
+export function RecipientField({ label, value, onChange, extra }: { label: string; value: Address[]; onChange(v: Address[]): void; extra?: React.ReactNode }) {
   const [text, setText] = useState('')
   const [suggestions, setSuggestions] = useState<Contact[]>([])
   const [active, setActive] = useState(0)

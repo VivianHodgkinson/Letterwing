@@ -49,7 +49,7 @@ const PRESETS: Record<string, Record<string, string>> = {
 export function SettingsDialog({ settings, accounts, onChange, onAccountChange, onRemoveAccount, onClose }: Props) {
   const [raw, setRaw] = useState(JSON.stringify(settings.themeVars, null, 2))
   const [rawError, setRawError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'general' | 'theme' | 'keyboard' | 'accounts'>('general')
+  const [tab, setTab] = useState<'general' | 'theme' | 'keyboard' | 'accounts' | 'calendars'>('general')
   const css = getComputedStyle(document.documentElement)
 
   const setVar = (k: string, v: string) => {
@@ -68,7 +68,8 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
               ['general', 'General'],
               ['theme', 'Theme'],
               ['keyboard', 'Keyboard'],
-              ['accounts', 'Accounts']
+              ['accounts', 'Accounts'],
+              ['calendars', 'Calendars']
             ] as const
           ).map(([k, l]) => (
             <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
@@ -171,6 +172,8 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
 
         {tab === 'keyboard' && <KeybindingsEditor settings={settings} onChange={onChange} />}
 
+        {tab === 'calendars' && <CalendarSettings settings={settings} onChange={onChange} />}
+
         {tab === 'accounts' && (
           <>
             <h3>Accounts</h3>
@@ -255,9 +258,99 @@ function AccountSettings({ account: a, onChange, onRemove }: { account: Account;
             <input type="checkbox" checked={!!a.signatureOnReplies} onChange={(e) => void onChange({ signatureOnReplies: e.target.checked })} />
             Also add it to replies and forwards
           </label>
+          {a.kind === 'imap' && (
+            <label>
+              Calendar (CalDAV) address <small>(optional; uses the same login)</small>
+              <input
+                defaultValue={a.caldavUrl ?? ''}
+                placeholder="e.g. https://caldav.fastmail.com/ · https://caldav.icloud.com/ · https://cloud.example.com/remote.php/dav"
+                onBlur={(e) => {
+                  const v = e.target.value.trim()
+                  if (v !== (a.caldavUrl ?? '')) void onChange({ caldavUrl: v || undefined })
+                }}
+              />
+            </label>
+          )}
         </div>
       )}
     </div>
+  )
+}
+
+const SUB_COLOURS = ['#4cc38a', '#e6c84f', '#e07ab8', '#3cc0c0', '#f0a04b', '#9a7cf0']
+
+function CalendarSettings({ settings, onChange }: { settings: Settings; onChange(patch: Partial<Settings>): Promise<void> }) {
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const hours = Array.from({ length: 25 }, (_, h) => h)
+  return (
+    <>
+      <h3>Working hours</h3>
+      <div className="row">
+        <label>
+          Day starts
+          <select value={settings.workDayStart} onChange={(e) => void onChange({ workDayStart: Number(e.target.value) })}>
+            {hours.slice(0, 24).map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Day ends
+          <select value={settings.workDayEnd} onChange={(e) => void onChange({ workDayEnd: Number(e.target.value) })}>
+            {hours.slice(1).map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Reminders
+          <select value={settings.reminderMinutes} onChange={(e) => void onChange({ reminderMinutes: Number(e.target.value) })}>
+            {[0, 5, 10, 15, 30, 60].map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? 'Off' : `${m} minutes before`}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <h3>Subscribed calendars</h3>
+      <p className="hint">Read-only calendars from a link: public holidays, sports fixtures, someone's published calendar (.ics or webcal://).</p>
+      {settings.icsSubscriptions.map((s) => (
+        <div key={s.id} className="account-row">
+          <span className="swatch on" style={{ background: s.color }} />
+          <span className="grow">
+            {s.name} <small>{s.url}</small>
+          </span>
+          <button className="ghost small danger" onClick={() => void onChange({ icsSubscriptions: settings.icsSubscriptions.filter((x) => x.id !== s.id) })}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="row">
+        <input placeholder="Name, e.g. SA public holidays" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="grow" placeholder="https://… .ics or webcal://…" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <button
+          className="ghost"
+          disabled={!/^(https?|webcals?):\/\//i.test(url.trim())}
+          onClick={() => {
+            const subs = settings.icsSubscriptions
+            void onChange({
+              icsSubscriptions: [...subs, { id: crypto.randomUUID(), name: name.trim() || 'Subscribed calendar', url: url.trim(), color: SUB_COLOURS[subs.length % SUB_COLOURS.length] }]
+            })
+            setName('')
+            setUrl('')
+          }}
+        >
+          Subscribe
+        </button>
+      </div>
+    </>
   )
 }
 

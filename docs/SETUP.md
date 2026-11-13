@@ -24,7 +24,8 @@ When adding the account, set *Tenant* to that tenant's domain (e.g. `contoso.co.
 
 ## Google / Gmail
 
-1. Google Cloud console → new project → **APIs & Services → Enable** *Gmail API* and *Google Calendar API*.
+1. Google Cloud console → new project → **APIs & Services → Enable** *Gmail API*, *Google Calendar API* and
+   *CalDAV API* (Inkwell reads Google calendars over CalDAV).
 2. **OAuth consent screen**: *Internal* if all accounts are in one Workspace org; otherwise *External* and add
    yourself as a test user. Scopes: `https://mail.google.com/`, `.../auth/calendar`, `openid`, `email`.
    - Note: External apps left in *Testing* mode get refresh tokens that expire after 7 days, so you'll have to
@@ -39,3 +40,16 @@ than storing it in plain text.
 
 Common servers: Fastmail `imap.fastmail.com` / `smtp.fastmail.com`; iCloud `imap.mail.me.com` / `smtp.mail.me.com`
 (app-specific password); cPanel hosts usually `mail.<domain>` on 993 / 465.
+
+## Calendars
+
+- **Microsoft 365** and **Google** accounts bring their calendars automatically (the sign-in already asks for
+  calendar access). Invitations you send are delivered by Microsoft / Google.
+- **IMAP accounts**: add the provider's CalDAV address in Settings → Accounts → *Name & signature*. It uses the
+  same login. Fastmail `https://caldav.fastmail.com/`, iCloud `https://caldav.icloud.com/` (app-specific
+  password), Nextcloud `https://<host>/remote.php/dav`. Servers with CalDAV scheduling (those three do) send
+  invitations and replies for you.
+- **Subscriptions**: Settings → Calendars takes any `.ics` / `webcal://` link (public holidays etc.). Read-only.
+- **Answering invitations in mail**: Microsoft answers through Exchange. Elsewhere, if the event is already in
+  your CalDAV calendar the answer goes through it; otherwise Inkwell emails a standard iCalendar reply to the
+  organizer, which Classic, Google and others understand. Like Classic, the answered invitation is then deleted.

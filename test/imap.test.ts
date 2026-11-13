@@ -8,7 +8,8 @@ import { SMTPServer } from 'smtp-server'
 import { simpleParser } from 'mailparser'
 import type { Account } from '../src/shared/types'
 import { ImapConnector } from '../src/main/connectors/imap'
-import { compile } from '../src/main/compose'
+import { compile, compileInviteReply } from '../src/main/compose'
+import { buildInviteReply, parseInvite } from '../src/main/ical'
 
 const mail = (id: string, subject: string, extra = '', body = 'Hello') =>
   `From: Jo Bloggs <jo@acme.test>\r\nTo: me@test.test\r\nSubject: ${subject}\r\nMessage-ID: <${id}@acme.test>\r\nDate: Thu, 12 Nov 2026 10:0${id.length}:00 +0200\r\n${extra}Content-Type: text/plain\r\n\r\n${body}\r\n`
@@ -154,6 +155,33 @@ try {
   const d2 = await c.saveDraft(draft, 'Drafts', d1)
   const drafts = await c.syncFolder('Drafts', null, 10)
   assert.deepEqual(drafts.upserts.map((u) => u.remoteId), [d2!.remoteId], 'only the newest draft copy remains')
+
+  // A meeting invitation: the text/calendar part becomes an invite card, not an attachment
+  const ics = ['BEGIN:VCALENDAR', 'METHOD:REQUEST', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:meet-1@acme.test', 'SEQUENCE:0', 'DTSTART:20261120T080000Z', 'DTEND:20261120T090000Z',
+    'SUMMARY:Planning', 'ORGANIZER;CN=Jo Bloggs:mailto:jo@acme.test', 'ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:me@test.test', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n')
+  imap.appendMessage(imap.getMailbox('INBOX'), [], new Date(), [
+    'From: Jo Bloggs <jo@acme.test>', 'To: me@test.test', 'Subject: Invitation: Planning', 'Message-ID: <invite@acme.test>',
+    'Content-Type: multipart/alternative; boundary="alt"', '', '--alt', 'Content-Type: text/plain', '', 'You are invited', '--alt',
+    'Content-Type: text/calendar; method=REQUEST; charset=utf-8', '', ics, '--alt--', ''].join('\r\n'))
+  const inviteUid = String(Math.max(...(await c.syncFolder('INBOX', state, 10)).upserts.map((u) => Number(u.remoteId))))
+  const inv = await c.fetchBody('INBOX', inviteUid)
+  assert.equal(inv.invite?.method, 'REQUEST')
+  assert.equal(inv.invite?.title, 'Planning')
+  assert.equal(inv.invite?.myStatus, 'needsAction')
+  assert.equal(inv.invite?.organizer?.address, 'jo@acme.test')
+  assert.equal(inv.attachments.filter((a) => !a.inline).length, 0, 'the .ics is not listed as a file')
+
+  // Answering it by email (iMIP): organizer gets METHOD:REPLY with my PARTSTAT
+  const replyMsg = await compileInviteReply(account, inv.invite!.organizer!, 'Accepted: Planning', 'See you there', buildInviteReply(inv.invite!.ics!, { name: 'Me', address: 'me@test.test' }, 'accepted'))
+  await c.send(replyMsg, null)
+  const got = await simpleParser(received.at(-1)!.raw)
+  assert.deepEqual(received.at(-1)!.to, ['jo@acme.test'])
+  const cal = got.attachments.find((a) => a.contentType === 'text/calendar') ?? null
+  const calText = cal ? cal.content.toString() : String((got as unknown as { text: string }).text)
+  const parsedReply = parseInvite(calText, 'jo@acme.test')!
+  assert.equal(parsedReply.method, 'REPLY')
+  assert.equal(parsedReply.uid, 'meet-1@acme.test')
+  assert.match(calText, /PARTSTAT=ACCEPTED/)
 
   // a wrong password is a readable error, not a hang
   const bad = new ImapConnector(account, async () => ({ pass: 'nope' }))

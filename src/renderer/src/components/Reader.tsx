@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Account, MessageBody, MessageSummary, Settings } from '@shared/types'
+import type { Account, CalendarEvent, Invite, MessageBody, MessageSummary, Settings } from '@shared/types'
+import { whenLabel } from './calendar/dates'
 import { api } from '../api'
 import { bytes, fullDate, hue, initials, shortDate, who, whoFull } from '../format'
 import type { ReplyKind } from '../replies'
@@ -13,6 +14,7 @@ export interface ReaderActions {
   toggleFlag(): void
   toggleRead(): void
   editDraft(message: MessageSummary): void
+  respondInvite(message: MessageSummary, answer: 'accepted' | 'tentative' | 'declined'): void
 }
 
 interface Props {
@@ -106,6 +108,7 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
             remoteImages={settings.loadRemoteImages || allowImages}
             onAllowImages={() => setAllowImages(true)}
             onReply={actions.reply}
+            onRespond={actions.respondInvite}
           />
         ))}
       </div>
@@ -121,6 +124,7 @@ function MessageCard(props: {
   remoteImages: boolean
   onAllowImages(): void
   onReply(kind: ReplyKind, message: MessageSummary, body: MessageBody): void
+  onRespond(message: MessageSummary, answer: 'accepted' | 'tentative' | 'declined'): void
 }) {
   const { message: m, account, expanded, onToggle, remoteImages } = props
   const [body, setBody] = useState<MessageBody | null>(null)
@@ -186,6 +190,7 @@ function MessageCard(props: {
           </button>
         </div>
       )}
+      {body?.invite && <InviteCard invite={body.invite} onRespond={(a) => props.onRespond(m, a)} />}
       {body?.hasRemoteContent && !remoteImages && (
         <div className="notice">
           Remote images are blocked to stop senders tracking when you read this.{' '}
@@ -215,6 +220,62 @@ function MessageCard(props: {
       ) : (
         <MailFrame body={body} remoteImages={remoteImages} />
       )}
+    </div>
+  )
+}
+
+/** Meeting request / update / cancellation: what, when, clashes, and the answer buttons */
+function InviteCard({ invite: i, onRespond }: { invite: Invite; onRespond(a: 'accepted' | 'tentative' | 'declined'): void }) {
+  const [clashes, setClashes] = useState<CalendarEvent[]>([])
+  useEffect(() => {
+    if (i.method !== 'REQUEST') return
+    let live = true
+    api.listEvents(i.start, i.end).then(
+      (list) => live && setClashes(list.filter((e) => e.uid !== i.uid && !e.allDay && e.myStatus !== 'declined' && e.showAs !== 'free')),
+      () => {}
+    )
+    return () => {
+      live = false
+    }
+  }, [i.uid, i.start])
+
+  const answered = i.myStatus === 'accepted' || i.myStatus === 'tentative' || i.myStatus === 'declined'
+  return (
+    <div className={`invite ${i.method === 'CANCEL' ? 'cancelled' : ''}`}>
+      <div className="invite-when">
+        <div className="invite-day">{new Date(i.start).toLocaleDateString([], { weekday: 'short' })}</div>
+        <div className="invite-date">{new Date(i.start).getDate()}</div>
+        <div className="invite-day">{new Date(i.start).toLocaleDateString([], { month: 'short' })}</div>
+      </div>
+      <div className="grow">
+        <div className="invite-title">
+          {i.method === 'CANCEL' ? 'Cancelled: ' : ''}
+          {i.title}
+          {i.recurring && <small> · repeats</small>}
+        </div>
+        <div className="meta">
+          {whenLabel(i.start, i.end, i.allDay)}
+          {i.location && <> · {i.location}</>}
+        </div>
+        {i.organizer && <div className="meta">Organizer: {whoFull(i.organizer)}</div>}
+        {clashes.length > 0 && (
+          <div className="invite-clash">
+            Conflicts with {clashes.slice(0, 2).map((c) => c.title).join(', ')}
+            {clashes.length > 2 ? ` and ${clashes.length - 2} more` : ''}
+          </div>
+        )}
+        {i.method === 'REQUEST' && (
+          <div className="invite-actions">
+            {answered && <span className="dim">You answered: {i.myStatus === 'accepted' ? 'Yes' : i.myStatus === 'tentative' ? 'Maybe' : 'No'} · </span>}
+            {(['accepted', 'tentative', 'declined'] as const).map((a) => (
+              <button key={a} className={`ghost small ${i.myStatus === a ? 'chosen' : ''}`} onClick={() => onRespond(a)}>
+                {a === 'accepted' ? '✓ Accept' : a === 'tentative' ? '? Tentative' : '✕ Decline'}
+              </button>
+            ))}
+          </div>
+        )}
+        {i.method === 'REPLY' && <div className="meta">This is a reply to a meeting you organised.</div>}
+      </div>
     </div>
   )
 }

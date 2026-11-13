@@ -98,3 +98,19 @@ export function htmlToText(html: string): string {
     .trim()
 }
 
+
+/** An iMIP reply to a meeting invitation: a short note plus the text/calendar part calendars act on */
+export async function compileInviteReply(account: Account, to: { name: string; address: string }, subject: string, note: string, ics: string): Promise<CompiledMessage> {
+  const build = () =>
+    new MailComposer({
+      from: { name: account.senderName ?? '', address: account.email },
+      to: [to],
+      subject,
+      text: note,
+      icalEvent: { method: 'REPLY', content: ics },
+      headers: { 'X-Mailer': 'Inkwell' }
+    })
+      .compile()
+      .build()
+  return { mime: build, mimeWithoutAttachments: build, attachments: [], envelope: { from: account.email, to: [to.address] } }
+}

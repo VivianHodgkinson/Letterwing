@@ -13,6 +13,7 @@ import * as db from './db'
 import { signIn } from './oauth'
 import * as store from './store'
 import * as sync from './sync'
+import * as calendar from './calendar'
 import { captureMode, runCapture, useProfileOverride } from './devcapture'
 
 useProfileOverride()
@@ -184,6 +185,7 @@ const api: Api = {
   async saveSettings(patch) {
     const s = store.saveSettings(patch)
     if (patch.syncInterval) sync.schedule(s.syncInterval)
+    if (patch.icsSubscriptions) void calendar.syncAll()
     return s
   },
   async openExternal(url) {
@@ -209,18 +211,23 @@ const api: Api = {
       await c.close()
     }
     store.saveAccounts([...store.getAccounts(), acc])
-    void sync.syncAccount(acc)
+    void sync.syncAccount(acc).then(() => calendar.syncAll())
     return acc
   },
   async updateAccount(id, patch) {
     const next = { ...account(id), ...patch, id }
     store.saveAccounts(store.getAccounts().map((a) => (a.id === id ? next : a)))
     // Only connection details need a new connector; a signature or colour change doesn't
-    if (['imap', 'smtp', 'username', 'email', 'tenant', 'clientId'].some((k) => k in patch)) await sync.dropConnector(id)
+    if (['imap', 'smtp', 'username', 'email', 'tenant', 'clientId', 'caldavUrl'].some((k) => k in patch)) {
+      await sync.dropConnector(id)
+      calendar.forget(id)
+      if ('caldavUrl' in patch) void calendar.syncAll()
+    }
     return next
   },
   async removeAccount(id) {
     await sync.dropConnector(id)
+    calendar.forget(id)
     store.saveAccounts(store.getAccounts().filter((a) => a.id !== id))
     store.setSecret(id, null)
     db.removeAccountData(id)
@@ -288,6 +295,7 @@ const api: Api = {
   async syncNow(accountId) {
     if (accountId) await sync.syncAccount(account(accountId))
     else await sync.syncAll()
+    void calendar.syncAll()
   },
 
   async suggestContacts(prefix) {
@@ -321,6 +329,19 @@ const api: Api = {
   async discardDraft(message) {
     await dropServerDraft(message)
   },
+  async listCalendars() {
+    return calendar.listCalendars()
+  },
+  listEvents: (from, to) => calendar.listEvents(from, to),
+  saveEvent: (input) => calendar.saveEvent(input),
+  deleteEvent: (key) => calendar.deleteEvent(key),
+  respondToEvent: (key, answer, comment) => calendar.respond(key, answer, comment),
+  async respondToInvite(messageKey, answer, comment) {
+    await calendar.respondToInvite(messageKey, answer, comment)
+    // Like Classic: an answered invitation leaves the inbox
+    await api.deleteMessages([messageKey]).catch(() => {})
+  },
+  syncCalendars: () => calendar.syncAll(),
   async openDraft(key) {
     const m = db.getMessage(key)
     if (!m) throw new Error('Draft not found')
@@ -386,8 +407,16 @@ app.whenReady().then(() => {
   db.openDb()
   sync.init(send, notifyNewMail)
   createWindow()
+  calendar.init(send, () => {
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
   sync.schedule(store.getSettings().syncInterval)
-  void sync.syncAll()
+  // Calendars refresh with the mail, after it so the inbox comes first
+  sync.onCycle(() => void calendar.syncAll())
+  void sync.syncAll().then(() => calendar.syncAll())
 })
 
 app.on('window-all-closed', () => app.quit())

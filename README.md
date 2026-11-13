@@ -21,7 +21,9 @@ renderer (React)  ──IPC──▶  main process
                              ├─ sync.ts        background sync, one connector per account
                              ├─ oauth.ts       browser sign-in, PKCE + loopback, token refresh
                              ├─ store.ts       settings/accounts JSON; secrets via OS keyring (safeStorage)
-                             └─ connectors/    one class per backend, all implementing MailConnector
+                             ├─ calendar.ts    calendar sync, invites, reminders
+                             ├─ ical.ts        iCalendar parse/expand/write, iMIP replies
+                             └─ connectors/    one class per backend: MailConnector (graph.ts, imap.ts), CalendarConnector (calendar.ts)
                                  ├─ graph.ts   Microsoft 365 via Graph (delta sync)
                                  └─ imap.ts    any IMAP server; Gmail via XOAUTH2
 ```
@@ -48,8 +50,12 @@ action is one entry in `ACTIONS` plus a handler in `App.tsx`. `F12` opens devtoo
       multi-select, open/save attachments, inline images, IMAP IDLE push (Graph: 1-minute poll), notifications,
       conversations, address autocomplete, older mail loads as you scroll
 - [ ] **M2 follow-ups:** offline outbox, undo send, list virtualisation for very long folders, CONDSTORE for big IMAP folders
-- [ ] **M3 - Calendar:** Graph calendar, CalDAV (Google, iCloud, Fastmail, Nextcloud), ICS subscriptions;
-      day/week/month views; meeting invites in mail with accept/decline
+- [x] **M3 - Calendar:** Microsoft 365 (Graph), CalDAV (Google, iCloud, Fastmail, Nextcloud) and ICS subscriptions;
+      day / work week / week / month views, mini month, per-calendar toggles; create, edit, delete, simple repeats,
+      invite people, Teams meetings; Accept / Tentative / Decline from the calendar or from the invitation in mail
+      (iMIP replies for non-Microsoft accounts), clash warnings, reminders
+- [ ] **M3 follow-ups:** drag to move/resize events, editing repeating CalDAV events, custom repeat rules, free/busy
+      lookup when inviting
 - [ ] **M4:** contacts and address autocomplete, rules, snooze, templates, keybinding editor, EWS (on-prem Exchange), JMAP
 
 ## Checking UI changes without clicking

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { effectiveKeymap, type ActionId } from '@shared/keys'
+import { ACTIONS, effectiveKeymap, type ActionId } from '@shared/keys'
 import type { Account, Folder, MessageSummary, Outgoing, Settings, SyncStatus } from '@shared/types'
 import { api, on } from './api'
 import { AccountDialog } from './components/AccountDialog'
+import { CalendarView, type CalendarHandle } from './components/calendar/CalendarView'
 import { Compose, type ComposeHandle } from './components/Compose'
 import { MessageList } from './components/MessageList'
 import { MoveDialog } from './components/MoveDialog'
@@ -38,6 +39,9 @@ export function App() {
   const [compose, setCompose] = useState<{ initial: Outgoing; id: number } | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [imagesRequest, setImagesRequest] = useState(0)
+  const [mode, setMode] = useState<'mail' | 'calendar'>('mail')
+  const [calEditing, setCalEditing] = useState(false)
+  const calRef = useRef<CalendarHandle>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const composeRef = useRef<ComposeHandle>(null)
   const anchor = useRef<string | null>(null)
@@ -122,8 +126,14 @@ export function App() {
       const s = p as SyncStatus
       setStatus((prev) => ({ ...prev, [s.accountId]: s }))
     })
+    // Clicking a reminder
+    const offEvent = on('open:event', (p) => {
+      setMode('calendar')
+      setTimeout(() => calRef.current?.open((p as { key: string }).key), 0)
+    })
     // Clicking a new-mail notification
     const offOpen = on('open:message', (p) => {
+      setMode('mail')
       const { key } = p as { key: string }
       setQuery('')
       setView(UNIFIED)
@@ -134,6 +144,7 @@ export function App() {
       offChanged()
       offStatus()
       offOpen()
+      offEvent()
       if (t) clearTimeout(t)
     }
   }, [loadMessages, loadAccounts])
@@ -212,7 +223,12 @@ export function App() {
     const keys = selection()
     if (!keys.length) return
     const idx = Math.max(...keys.map((k) => messages.findIndex((m) => m.key === k)))
-    const next = messages.slice(idx + 1).find((m) => !keys.includes(m.key)) ?? messages.slice(0, idx).reverse().find((m) => !keys.includes(m.key))
+    const next =
+      messages.slice(idx + 1).find((m) => !keys.includes(m.key)) ??
+      messages
+        .slice(0, idx)
+        .reverse()
+        .find((m) => !keys.includes(m.key))
     setSelected(new Set(next ? [next.key] : []))
     setPrimary(next?.key ?? null)
     try {
@@ -270,7 +286,19 @@ export function App() {
     if (m) select(m)
   }
   const keys = () => selection()
-  const handlers: Partial<Record<ActionId, () => void>> = {
+  const respondInvite = (m: MessageSummary, answer: 'accepted' | 'tentative' | 'declined') =>
+    void removeAndAdvance(() => api.respondToInvite(m.key, answer), 'send your response').then(() => say('Response sent.'))
+  const calendarHandlers: Partial<Record<ActionId, () => void>> = {
+    newEvent: () => calRef.current?.newEvent(),
+    calendarDay: () => calRef.current?.setView('day'),
+    calendarWorkWeek: () => calRef.current?.setView('workweek'),
+    calendarWeek: () => calRef.current?.setView('week'),
+    calendarMonth: () => calRef.current?.setView('month'),
+    prevPeriod: () => calRef.current?.prev(),
+    nextPeriod: () => calRef.current?.next(),
+    goToToday: () => calRef.current?.today()
+  }
+  const mailHandlers: Partial<Record<ActionId, () => void>> = {
     nextMessage: () => move((i) => i + 1),
     prevMessage: () => move((i) => (i < 0 ? 0 : i - 1)),
     firstMessage: () => move(() => 0),
@@ -283,9 +311,19 @@ export function App() {
       setPrimary(null)
       setSelected(new Set())
     },
-    markRead: () => void expand(keys()).then((k) => api.setRead(k, true)).catch(fail),
-    markUnread: () => void expand(keys()).then((k) => api.setRead(k, false)).catch(fail),
-    toggleRead: () => current && void expand(keys()).then((k) => api.setRead(k, current.unread)).catch(fail),
+    markRead: () =>
+      void expand(keys())
+        .then((k) => api.setRead(k, true))
+        .catch(fail),
+    markUnread: () =>
+      void expand(keys())
+        .then((k) => api.setRead(k, false))
+        .catch(fail),
+    toggleRead: () =>
+      current &&
+      void expand(keys())
+        .then((k) => api.setRead(k, current.unread))
+        .catch(fail),
     toggleFlag: () => current && void api.setFlagged(keys(), !current.flagged).catch(fail),
     reply: () => void reply('reply'),
     replyAll: () => void reply('replyAll'),
@@ -318,7 +356,14 @@ export function App() {
         }
       : {})
   }
-  useKeymap(keymap ?? effectiveKeymap('classic', {}), handlers, !!keymap && dialog === null)
+  // Only the current mode's actions (plus the everywhere ones) respond, so J can mean different things in each
+  const scopeOf = new Map(ACTIONS.map((a) => [a.id, a.scope]))
+  const handlers: Partial<Record<ActionId, () => void>> = Object.fromEntries(
+    Object.entries({ ...mailHandlers, ...calendarHandlers, goToMail: () => setMode('mail'), goToCalendar: () => setMode('calendar') }).filter(
+      ([id]) => !scopeOf.get(id as ActionId) || scopeOf.get(id as ActionId) === mode
+    )
+  )
+  useKeymap(keymap ?? effectiveKeymap('classic', {}), handlers, !!keymap && dialog === null && !calEditing)
 
   if (!settings) return null
   const syncing = Object.values(status).some((s) => s.state === 'syncing')
@@ -344,17 +389,30 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">Inkwell</div>
-        <button
-          className="primary new-mail"
-          onClick={() => {
-            const a = defaultAccount()
-            if (a) void startCompose(newMessage(a))
-          }}
-          disabled={!accounts.length}
-        >
-          ✎ New mail
-        </button>
-        <input ref={searchRef} className="search" placeholder="Search all mail" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <div className="tabs mode-tabs">
+          <button className={mode === 'mail' ? 'active' : ''} onClick={() => setMode('mail')} title="Mail (Ctrl+1)">
+            ✉ Mail
+          </button>
+          <button className={mode === 'calendar' ? 'active' : ''} onClick={() => setMode('calendar')} title="Calendar (Ctrl+2)">
+            📅 Calendar
+          </button>
+        </div>
+        {mode === 'mail' && (
+          <>
+            <button
+              className="primary new-mail"
+              onClick={() => {
+                const a = defaultAccount()
+                if (a) void startCompose(newMessage(a))
+              }}
+              disabled={!accounts.length}
+            >
+              ✎ New mail
+            </button>
+            <input ref={searchRef} className="search" placeholder="Search all mail" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </>
+        )}
+        {mode === 'calendar' && <span className="grow" />}
         <button className="ghost" title="Send / receive" onClick={() => void api.syncNow().catch(fail)}>
           {syncing ? 'Syncing…' : 'Sync'}
         </button>
@@ -365,11 +423,27 @@ export function App() {
 
       {(notice || errors.length > 0) && (
         <div className={`banner ${notice && !notice.error ? 'info' : ''}`} onClick={() => setNotice(null)}>
-          {notice?.text ?? errors.map((s) => `${accountById[s.accountId]?.name ?? 'Account'}: ${s.message}`).join(' · ')}
+          {notice?.text ?? errors
+              .map((s) => {
+                // Connector messages usually start with the account name already
+                const name = accountById[s.accountId]?.name ?? 'Account'
+                return s.message?.startsWith(name) ? s.message : `${name}: ${s.message}`
+              })
+              .join(' · ')}
         </div>
       )}
 
-      <div className="body">
+      {mode === 'calendar' && (
+        <CalendarView
+          ref={calRef}
+          settings={settings}
+          accounts={accounts}
+          onSettings={async (patch) => setSettings(await api.saveSettings(patch))}
+          onStatus={say}
+          onEditing={setCalEditing}
+        />
+      )}
+      <div className="body" hidden={mode !== 'mail'}>
         <Sidebar
           accounts={accounts}
           folders={folders}
@@ -385,7 +459,10 @@ export function App() {
           onDropMessages={(dropped, accountId, folderId) => {
             const same = messages.filter((m) => dropped.includes(m.key) && m.accountId === accountId).map((m) => m.key)
             if (same.length < dropped.length) say('Messages can only be moved between folders of the same account.', true)
-            if (same.length) void expand(same).then((k) => api.moveMessages(k, folderId)).catch(fail)
+            if (same.length)
+              void expand(same)
+                .then((k) => api.moveMessages(k, folderId))
+                .catch(fail)
           }}
         />
         {accounts.length === 0 ? (
@@ -425,8 +502,13 @@ export function App() {
                     remove,
                     move: openMove,
                     toggleFlag: () => current && void api.setFlagged(selection(), !current.flagged).catch(fail),
-                    toggleRead: () => current && void expand(selection()).then((k) => api.setRead(k, current.unread)).catch(fail),
-                    editDraft: (m) => void open(m)
+                    toggleRead: () =>
+                      current &&
+                      void expand(selection())
+                        .then((k) => api.setRead(k, current.unread))
+                        .catch(fail),
+                    editDraft: (m) => void open(m),
+                    respondInvite
                   }}
                 />
               ))}
