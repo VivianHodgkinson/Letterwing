@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Account, Folder, FolderRole, SyncStatus } from '@shared/types'
 import type { View } from '../App'
+import { DRAG_TYPE } from './MessageList'
 
 const ORDER: FolderRole[] = ['inbox', 'drafts', 'sent', 'archive', 'junk', 'trash']
 const ICON: Record<FolderRole, string> = { inbox: '📥', drafts: '📝', sent: '📤', archive: '🗄', junk: '⚠', trash: '🗑', other: '📁' }
@@ -12,9 +13,12 @@ interface Props {
   view: View
   onView(v: View): void
   onAddAccount(): void
+  /** Messages dropped onto a folder */
+  onDropMessages(keys: string[], accountId: string, folderId: string): void
 }
 
-export function Sidebar({ accounts, folders, status, view, onView, onAddAccount }: Props) {
+export function Sidebar({ accounts, folders, status, view, onView, onAddAccount, onDropMessages }: Props) {
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const totalUnread = accounts.reduce((n, a) => n + (folders[a.id]?.find((f) => f.role === 'inbox')?.unread ?? 0), 0)
 
@@ -42,9 +46,21 @@ export function Sidebar({ accounts, folders, status, view, onView, onAddAccount 
               list.map(({ folder: f, depth }) => (
                 <button
                   key={f.id}
-                  className={`folder ${view.accountId === a.id && view.folderId === f.id ? 'active' : ''}`}
+                  className={`folder ${view.accountId === a.id && view.folderId === f.id ? 'active' : ''} ${dropTarget === a.id + f.id ? 'drop' : ''}`}
                   style={{ paddingLeft: 14 + depth * 14 }}
                   onClick={() => onView({ accountId: a.id, folderId: f.id })}
+                  onDragOver={(e) => {
+                    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    setDropTarget(a.id + f.id)
+                  }}
+                  onDragLeave={() => setDropTarget(null)}
+                  onDrop={(e) => {
+                    setDropTarget(null)
+                    const raw = e.dataTransfer.getData(DRAG_TYPE)
+                    if (raw) onDropMessages(JSON.parse(raw) as string[], a.id, f.id)
+                  }}
                 >
                   <span className="ficon">{ICON[f.role]}</span>
                   <span className="fname">{f.name}</span>

@@ -6,7 +6,7 @@ Built with Electron, React and TypeScript, the same stack as [Verdigit](../Verdi
 ```sh
 npm install
 npm run dev        # hot reload
-npm test           # cache/search tests (runs in Electron's Node, real SQLite)
+npm test           # cache, compose, keymap and IMAP/SMTP end-to-end tests (in-memory servers, no network)
 npm run typecheck
 npm run dist:linux
 ```
@@ -43,9 +43,22 @@ action is one entry in `ACTIONS` plus a handler in `App.tsx`. `F12` opens devtoo
 ## Roadmap
 
 - [x] **M1 - Read:** accounts (M365, Google, IMAP), folder tree, unified inbox, sync, offline cache, search, flags, themes
-- [ ] **M2 - Write:** compose/reply/forward, HTML signatures per account, drafts, send (SMTP / Graph), move, delete,
-      archive, open/save attachments, inline `cid:` images, IMAP IDLE push, desktop notifications, threading,
-      virtualised list
+- [x] **M2 - Write:** compose/reply/reply all/forward (business-style quoting), HTML signatures per account, drafts saved
+      to the server, send (SMTP / Graph, big attachments via upload sessions), move/delete/archive with drag-to-folder,
+      multi-select, open/save attachments, inline images, IMAP IDLE push (Graph: 1-minute poll), notifications,
+      conversations, address autocomplete, older mail loads as you scroll
+- [ ] **M2 follow-ups:** offline outbox, undo send, list virtualisation for very long folders, CONDSTORE for big IMAP folders
 - [ ] **M3 - Calendar:** Graph calendar, CalDAV (Google, iCloud, Fastmail, Nextcloud), ICS subscriptions;
       day/week/month views; meeting invites in mail with accept/decline
 - [ ] **M4:** contacts and address autocomplete, rules, snooze, templates, keybinding editor, EWS (on-prem Exchange), JMAP
+
+## Checking UI changes without clicking
+
+`INKWELL_CAPTURE` runs the app in an offscreen window on a profile of your choice, performs scripted steps and saves
+screenshots, then quits:
+
+```sh
+INKWELL_PROFILE=/tmp/inkwell-test INKWELL_CAPTURE=/tmp/shots \
+INKWELL_STEPS='[["wait",1500],["shot","inbox"],["js","document.querySelector(\".msg\").click()"],["wait",800],["shot","reader"]]' \
+npx electron .
+```

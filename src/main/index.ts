@@ -13,6 +13,9 @@ import * as db from './db'
 import { signIn } from './oauth'
 import * as store from './store'
 import * as sync from './sync'
+import { captureMode, runCapture, useProfileOverride } from './devcapture'
+
+useProfileOverride()
 
 let win: BrowserWindow | null = null
 const devIcon = join(__dirname, '../../resources/icon.png')
@@ -28,9 +31,10 @@ function createWindow(): void {
     title: 'Inkwell',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' && existsSync(devIcon) ? { icon: devIcon } : {}),
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: captureMode }
   })
-  win.once('ready-to-show', () => win?.show())
+  if (captureMode) win.webContents.once('did-finish-load', () => void runCapture(win!))
+  else win.once('ready-to-show', () => win?.show())
   // Links in mail open in the system browser, never inside the app
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^(https?|mailto):/.test(url)) shell.openExternal(url)
@@ -277,6 +281,9 @@ const api: Api = {
     if (r.canceled || !r.filePath) return false
     await writeFile(r.filePath, a.content)
     return true
+  },
+  async syncStatus() {
+    return sync.statuses()
   },
   async syncNow(accountId) {
     if (accountId) await sync.syncAccount(account(accountId))

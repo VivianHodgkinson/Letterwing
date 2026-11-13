@@ -27,7 +27,7 @@ export class ImapConnector implements MailConnector {
     private auth: () => Promise<Auth>
   ) {}
 
-  private async makeClient(): Promise<ImapFlow> {
+  private async makeClient(extra: { autoIdleDelay?: number } = {}): Promise<ImapFlow> {
     const s = this.account.imap
     if (!s) throw new Error('No IMAP server configured')
     const client = new ImapFlow({
@@ -37,7 +37,8 @@ export class ImapConnector implements MailConnector {
       doSTARTTLS: s.security === 'starttls' ? true : undefined,
       auth: { user: this.account.username || this.account.email, ...(await this.auth()) },
       logger: false,
-      emitLogs: false
+      emitLogs: false,
+      ...extra
     })
     // A dropped connection is not fatal: the next call reconnects.
     client.on('error', () => {})
@@ -156,7 +157,8 @@ export class ImapConnector implements MailConnector {
     try {
       const msg = await c.fetchOne(remoteId, { source: true }, { uid: true })
       if (!msg || !msg.source) throw new Error('Message no longer exists on the server')
-      return await simpleParser(msg.source)
+      // keepCidLinks: fetchBody embeds inline images itself, so it can cap their size and mark them inline
+      return await simpleParser(msg.source, { keepCidLinks: true })
     } finally {
       lock.release()
     }
@@ -278,7 +280,8 @@ export class ImapConnector implements MailConnector {
     const start = async (): Promise<void> => {
       if (stopped) return
       try {
-        client = await this.makeClient()
+        // This connection only waits for news, so go into IDLE almost at once (imapflow's default waits 15 s)
+        client = await this.makeClient({ autoIdleDelay: 1000 })
         client.on('exists', onChange)
         client.on('flags', onChange)
         client.on('expunge', onChange)

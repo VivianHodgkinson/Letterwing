@@ -31,14 +31,24 @@ export function connector(account: Account): MailConnector {
 }
 
 export async function dropConnector(accountId: string): Promise<void> {
+  lastStatus.delete(accountId)
   watchers.get(accountId)?.()
   watchers.delete(accountId)
   await connectors.get(accountId)?.close()
   connectors.delete(accountId)
 }
 
+/** Last status per account, so a window that opens after startup's first sync still sees errors */
+const lastStatus = new Map<string, SyncStatus>()
+
 function status(s: Omit<SyncStatus, 'at'>): void {
-  notify('sync:status', { ...s, at: Date.now() })
+  const full = { ...s, at: Date.now() }
+  lastStatus.set(s.accountId, full)
+  notify('sync:status', full)
+}
+
+export function statuses(): SyncStatus[] {
+  return [...lastStatus.values()]
 }
 
 /** Start push (IMAP IDLE) or polling for an account's inbox, once its folders are known */

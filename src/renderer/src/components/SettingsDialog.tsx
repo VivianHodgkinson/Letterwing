@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Account, Settings } from '@shared/types'
 import { KeybindingsEditor } from './KeybindingsEditor'
 
@@ -6,6 +6,7 @@ interface Props {
   settings: Settings
   accounts: Account[]
   onChange(patch: Partial<Settings>): Promise<void>
+  onAccountChange(id: string, patch: Partial<Account>): Promise<void>
   onRemoveAccount(id: string): Promise<void>
   onClose(): void
 }
@@ -45,7 +46,7 @@ const PRESETS: Record<string, Record<string, string>> = {
   Ember: { '--accent': '#ff8a3d', '--bg-0': '#120d0a', '--bg-1': '#1a1310', '--bg-2': '#2a1e18', '--unread': '#ff8a3d' }
 }
 
-export function SettingsDialog({ settings, accounts, onChange, onRemoveAccount, onClose }: Props) {
+export function SettingsDialog({ settings, accounts, onChange, onAccountChange, onRemoveAccount, onClose }: Props) {
   const [raw, setRaw] = useState(JSON.stringify(settings.themeVars, null, 2))
   const [rawError, setRawError] = useState<string | null>(null)
   const [tab, setTab] = useState<'general' | 'theme' | 'keyboard' | 'accounts'>('general')
@@ -110,6 +111,14 @@ export function SettingsDialog({ settings, accounts, onChange, onRemoveAccount, 
               <input type="checkbox" checked={settings.loadRemoteImages} onChange={(e) => void onChange({ loadRemoteImages: e.target.checked })} />
               Always load remote images (lets senders see when you open their mail)
             </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.conversations} onChange={(e) => void onChange({ conversations: e.target.checked })} />
+              Show messages as conversations
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.notifications} onChange={(e) => void onChange({ notifications: e.target.checked })} />
+              Desktop notification for new mail
+            </label>
           </>
         )}
 
@@ -166,23 +175,9 @@ export function SettingsDialog({ settings, accounts, onChange, onRemoveAccount, 
           <>
             <h3>Accounts</h3>
             {accounts.map((a) => (
-              <div key={a.id} className="account-row">
-                <span className="badge small" style={{ ['--acct' as string]: a.color }}>
-                  {a.label}
-                </span>
-                <span className="grow">
-                  {a.name} <small>{a.email}</small>
-                </span>
-                <button
-                  className="ghost danger"
-                  onClick={() => {
-                    if (confirm(`Remove ${a.name}? Its local cache is deleted; nothing on the server changes.`)) void onRemoveAccount(a.id)
-                  }}
-                >
-                  Remove
-                </button>
-              </div>
+              <AccountSettings key={a.id} account={a} onChange={(patch) => onAccountChange(a.id, patch)} onRemove={() => onRemoveAccount(a.id)} />
             ))}
+            <h3>Sign-in apps</h3>
             <div className="row">
               <label className="grow">
                 Microsoft app (client) ID
@@ -212,6 +207,56 @@ export function SettingsDialog({ settings, accounts, onChange, onRemoveAccount, 
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function AccountSettings({ account: a, onChange, onRemove }: { account: Account; onChange(patch: Partial<Account>): Promise<void>; onRemove(): void }) {
+  const [open, setOpen] = useState(false)
+  const [senderName, setSenderName] = useState(a.senderName ?? '')
+  const sig = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (open && sig.current) sig.current.innerHTML = a.signature ?? ''
+  }, [open])
+
+  return (
+    <div className="account-block">
+      <div className="account-row">
+        <span className="badge small" style={{ ['--acct' as string]: a.color }}>
+          {a.label}
+        </span>
+        <span className="grow">
+          {a.name} <small>{a.email}</small>
+        </span>
+        <button className="ghost small" onClick={() => setOpen(!open)}>
+          {open ? 'Close' : 'Name & signature'}
+        </button>
+        <button
+          className="ghost small danger"
+          onClick={() => {
+            if (confirm(`Remove ${a.name}? Its local cache is deleted; nothing on the server changes.`)) onRemove()
+          }}
+        >
+          Remove
+        </button>
+      </div>
+      {open && (
+        <div className="account-detail">
+          <label>
+            Your name (what recipients see)
+            <input value={senderName} placeholder="e.g. Jo Bloggs" onChange={(e) => setSenderName(e.target.value)} onBlur={() => void onChange({ senderName: senderName.trim() })} />
+          </label>
+          <label>
+            Signature <small>(paste from Classic or Word to keep formatting and logos)</small>
+          </label>
+          <div ref={sig} className="editor signature-editor" contentEditable suppressContentEditableWarning onBlur={() => void onChange({ signature: sig.current?.innerHTML ?? '' })} />
+          <label className="check">
+            <input type="checkbox" checked={!!a.signatureOnReplies} onChange={(e) => void onChange({ signatureOnReplies: e.target.checked })} />
+            Also add it to replies and forwards
+          </label>
+        </div>
+      )}
     </div>
   )
 }

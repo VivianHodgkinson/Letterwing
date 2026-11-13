@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { normaliseBinding, type ActionId, type Keymap } from '@shared/keys'
+import { ACTIONS, normaliseBinding, type ActionId, type Keymap } from '@shared/keys'
 import { on } from './api'
 
 const NAMES: Record<string, string> = {
@@ -45,6 +45,7 @@ function allowedWhileTyping(combo: string): boolean {
 }
 
 const SEQUENCE_TIMEOUT = 1200
+const TYPING_OK = new Set(ACTIONS.filter((a) => a.whileTyping).map((a) => a.id))
 
 /**
  * Global shortcut listener. Handles sequences: after "G" it waits for the next key,
@@ -65,9 +66,9 @@ export function useKeymap(map: Keymap, handlers: Partial<Record<ActionId, () => 
       if (!combo) return false
       if (typing && !allowedWhileTyping(combo)) return false
 
-      const bindings = (Object.entries(s.map) as [ActionId, string[]][]).flatMap(([action, list]) =>
-        list.map((b) => ({ action, keys: normaliseBinding(b) }))
-      )
+      const bindings = (Object.entries(s.map) as [ActionId, string[]][])
+        .filter(([action]) => !typing || TYPING_OK.has(action))
+        .flatMap(([action, list]) => list.map((b) => ({ action, keys: normaliseBinding(b) })))
       const tryWith = (pending: string[]): boolean => {
         const typed = [...pending, combo].join(' ')
         const exact = bindings.find((b) => b.keys === typed && s.handlers[b.action])

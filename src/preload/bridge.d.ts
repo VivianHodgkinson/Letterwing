@@ -5,6 +5,7 @@ declare global {
     bridge: {
       invoke(method: ApiMethod, args: unknown[]): Promise<IpcResult<unknown>>
       on(channel: EventChannel, cb: (payload: unknown) => void): () => void
+      pathForFile(file: File): string
       platform: string
     }
   }

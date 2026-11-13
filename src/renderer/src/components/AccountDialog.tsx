@@ -19,6 +19,7 @@ export function AccountDialog({ onClose, onAdded }: Props) {
   const [kind, setKind] = useState<AccountKind>('microsoft')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
+  const [senderName, setSenderName] = useState('')
   const [label, setLabel] = useState('')
   const [color, setColor] = useState(COLOURS[0])
   const [password, setPassword] = useState('')
@@ -39,6 +40,7 @@ export function AccountDialog({ onClose, onAdded }: Props) {
       kind,
       email: email.trim(),
       name: name.trim() || domain || email,
+      senderName: senderName.trim() || undefined,
       label: (label.trim() || (name || domain).slice(0, 3)).toUpperCase(),
       color,
       auth: kind === 'imap' ? 'password' : 'oauth',
@@ -97,9 +99,13 @@ export function AccountDialog({ onClose, onAdded }: Props) {
           Email address
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
         </label>
+        <label>
+          Your name <small>(what people see when you send)</small>
+          <input placeholder="e.g. Jo Bloggs" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+        </label>
         <div className="row">
           <label className="grow">
-            Display name
+            Account label
             <input placeholder={domain || 'Work'} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label>

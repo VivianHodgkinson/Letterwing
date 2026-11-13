@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { ApiMethod, EventChannel, IpcResult } from '@shared/api'
 
 const bridge = {
@@ -8,6 +8,8 @@ const bridge = {
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   },
+  /** Path of a file dropped onto the window, for attaching it */
+  pathForFile: (file: File): string => webUtils.getPathForFile(file),
   platform: process.platform
 }
 

@@ -39,6 +39,7 @@ export interface Api {
   openAttachment(key: string, attachmentId: string): Promise<void>
   saveAttachment(key: string, attachmentId: string): Promise<boolean>
   syncNow(accountId?: string): Promise<void>
+  syncStatus(): Promise<SyncStatus[]>
 
   // writing
   suggestContacts(prefix: string): Promise<Contact[]>

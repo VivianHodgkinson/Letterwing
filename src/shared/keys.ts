@@ -13,10 +13,22 @@ export type ActionId =
   | 'prevMessage'
   | 'firstMessage'
   | 'lastMessage'
+  | 'selectAll'
+  | 'openMessage'
   | 'markRead'
   | 'markUnread'
   | 'toggleRead'
   | 'toggleFlag'
+  | 'newMessage'
+  | 'reply'
+  | 'replyAll'
+  | 'forward'
+  | 'delete'
+  | 'archive'
+  | 'moveToFolder'
+  | 'send'
+  | 'saveDraft'
+  | 'closeCompose'
   | 'search'
   | 'clearSearch'
   | 'goInbox'
@@ -28,7 +40,12 @@ export type ActionId =
 export interface ActionInfo {
   id: ActionId
   label: string
-  group: 'Navigate' | 'Message' | 'Search' | 'App'
+  group: 'Navigate' | 'Message' | 'Compose' | 'Search' | 'App'
+  /**
+   * Can fire while focus is in a text field (only for combos with Ctrl/Alt/Meta, F-keys or Escape).
+   * Off for anything that acts on the message list, so Ctrl+A in the editor still selects text.
+   */
+  whileTyping?: boolean
 }
 
 /** Every bindable action. New features add an entry here and a handler in the renderer. */
@@ -37,15 +54,27 @@ export const ACTIONS: ActionInfo[] = [
   { id: 'prevMessage', label: 'Previous message', group: 'Navigate' },
   { id: 'firstMessage', label: 'First message', group: 'Navigate' },
   { id: 'lastMessage', label: 'Last message', group: 'Navigate' },
-  { id: 'goInbox', label: 'Go to all inboxes', group: 'Navigate' },
+  { id: 'selectAll', label: 'Select all messages', group: 'Navigate' },
+  { id: 'openMessage', label: 'Open (edit a draft)', group: 'Navigate' },
+  { id: 'goInbox', label: 'Go to all inboxes', group: 'Navigate', whileTyping: true },
   { id: 'markRead', label: 'Mark as read', group: 'Message' },
   { id: 'markUnread', label: 'Mark as unread', group: 'Message' },
   { id: 'toggleRead', label: 'Toggle read / unread', group: 'Message' },
   { id: 'toggleFlag', label: 'Flag / unflag', group: 'Message' },
+  { id: 'reply', label: 'Reply', group: 'Message' },
+  { id: 'replyAll', label: 'Reply all', group: 'Message' },
+  { id: 'forward', label: 'Forward', group: 'Message' },
+  { id: 'delete', label: 'Delete', group: 'Message' },
+  { id: 'archive', label: 'Archive', group: 'Message' },
+  { id: 'moveToFolder', label: 'Move to folder…', group: 'Message' },
   { id: 'loadImages', label: 'Load remote images', group: 'Message' },
-  { id: 'search', label: 'Search', group: 'Search' },
-  { id: 'clearSearch', label: 'Clear search', group: 'Search' },
-  { id: 'syncAll', label: 'Send / receive all', group: 'App' },
+  { id: 'newMessage', label: 'New message', group: 'Compose', whileTyping: true },
+  { id: 'send', label: 'Send', group: 'Compose', whileTyping: true },
+  { id: 'saveDraft', label: 'Save draft', group: 'Compose', whileTyping: true },
+  { id: 'closeCompose', label: 'Close message (keeps draft)', group: 'Compose', whileTyping: true },
+  { id: 'search', label: 'Search', group: 'Search', whileTyping: true },
+  { id: 'clearSearch', label: 'Clear search', group: 'Search', whileTyping: true },
+  { id: 'syncAll', label: 'Send / receive all', group: 'App', whileTyping: true },
   { id: 'openSettings', label: 'Settings', group: 'App' },
   { id: 'addAccount', label: 'Add account', group: 'App' }
 ]
@@ -60,12 +89,25 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       prevMessage: ['Up', 'Ctrl+,'],
       firstMessage: ['Home'],
       lastMessage: ['End'],
+      selectAll: ['Ctrl+A'],
+      openMessage: ['Enter', 'Ctrl+O'],
       goInbox: ['Ctrl+Shift+I'],
       markRead: ['Ctrl+Q'],
       markUnread: ['Ctrl+U'],
       toggleRead: [],
       toggleFlag: ['Insert'],
+      reply: ['Ctrl+R'],
+      replyAll: ['Ctrl+Shift+R'],
+      forward: ['Ctrl+F'],
+      delete: ['Delete', 'Ctrl+D'],
+      archive: ['Backspace'],
+      moveToFolder: ['Ctrl+Shift+V'],
       loadImages: [],
+      newMessage: ['Ctrl+N', 'Ctrl+Shift+M'],
+      send: ['Ctrl+Enter', 'Alt+S'],
+      saveDraft: ['Ctrl+S'],
+      // Escape belongs to Clear search; Classic closes a message with the window's close button
+      closeCompose: [],
       search: ['Ctrl+E', 'F3'],
       clearSearch: ['Escape'],
       syncAll: ['F9'],
@@ -80,12 +122,24 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       prevMessage: ['K', 'Up'],
       firstMessage: ['Home'],
       lastMessage: ['End'],
+      selectAll: ['* A'],
+      openMessage: ['O', 'Enter'],
       goInbox: ['G I'],
       markRead: ['Shift+I'],
       markUnread: ['Shift+U'],
       toggleRead: [],
       toggleFlag: ['S'],
+      reply: ['R'],
+      replyAll: ['A'],
+      forward: ['F'],
+      delete: ['#'],
+      archive: ['E'],
+      moveToFolder: ['V'],
       loadImages: [],
+      newMessage: ['C'],
+      send: ['Ctrl+Enter'],
+      saveDraft: ['Ctrl+S'],
+      closeCompose: [],
       search: ['/'],
       clearSearch: ['Escape'],
       syncAll: [],

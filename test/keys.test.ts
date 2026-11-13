@@ -37,3 +37,11 @@ assert.equal(comboFromEvent(ev('Control', 'ControlLeft', { ctrlKey: true })), nu
 // every preset binding is reachable: it equals what comboFromEvent produces once normalised
 for (const p of Object.values(PRESETS)) for (const list of Object.values(p.keys)) for (const b of list) assert.equal(normaliseBinding(b), b, `${b} is canonical`)
 console.log('keys tests passed')
+
+// Bindings must be producible by comboFromEvent: a digit key never appears with Shift (it reads as the symbol)
+for (const p of Object.values(PRESETS))
+  for (const list of Object.values(p.keys)) for (const b of list) assert.doesNotMatch(b, /Shift\+\d/, `${b} can't be typed: Shift+digit reads as a symbol`)
+// whileTyping is off for list actions, so Ctrl+A in the editor stays select-all-text
+assert.equal(ACTIONS.find((a) => a.id === 'selectAll')!.whileTyping, undefined)
+assert.equal(ACTIONS.find((a) => a.id === 'send')!.whileTyping, true)
+console.log('keys typing tests passed')
