@@ -9,7 +9,7 @@ import type { Address, Attendee, CalendarEvent, EventInput, Invite, Repeat, Resp
 
 export type RemoteEvent = Omit<CalendarEvent, 'key' | 'accountId' | 'calendarId'>
 
-const PRODID = '-//Inkwell//Inkwell//EN'
+const PRODID = '-//Letterwing//Letterwing//EN'
 /** A runaway RRULE (or one with no end) stops expanding here */
 const MAX_OCCURRENCES = 2000
 
@@ -179,7 +179,7 @@ function writeFields(v: ICAL.Component, input: EventInput, me: Address, previous
 }
 
 export function buildEventIcs(input: EventInput, me: Address): { ics: string; uid: string } {
-  const uid = `${randomUUID()}@inkwell`
+  const uid = `${randomUUID()}@letterwing`
   const cal = new ICAL.Component(['vcalendar', [], []])
   cal.addPropertyWithValue('prodid', PRODID)
   cal.addPropertyWithValue('version', '2.0')

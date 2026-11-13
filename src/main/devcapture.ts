@@ -2,19 +2,19 @@ import { app, type BrowserWindow } from 'electron'
 import { writeFileSync } from 'node:fs'
 
 /**
- * Development aid, off unless INKWELL_CAPTURE is set: runs steps against a hidden window and
+ * Development aid, off unless LETTERWING_CAPTURE is set: runs steps against a hidden window and
  * saves screenshots, so UI changes can be checked without clicking through by hand.
- *   INKWELL_PROFILE=/tmp/p  INKWELL_CAPTURE=/tmp/shots  INKWELL_STEPS='[["js", "..."], ["shot", "name"], ["wait", 500]]'
+ *   LETTERWING_PROFILE=/tmp/p  LETTERWING_CAPTURE=/tmp/shots  LETTERWING_STEPS='[["js", "..."], ["shot", "name"], ["wait", 500]]'
  */
-export const captureMode = !!process.env.INKWELL_CAPTURE
+export const captureMode = !!process.env.LETTERWING_CAPTURE
 
 export function useProfileOverride(): void {
-  if (process.env.INKWELL_PROFILE) app.setPath('userData', process.env.INKWELL_PROFILE)
+  if (process.env.LETTERWING_PROFILE) app.setPath('userData', process.env.LETTERWING_PROFILE)
 }
 
 export async function runCapture(win: BrowserWindow): Promise<void> {
-  const out = process.env.INKWELL_CAPTURE!
-  const steps = JSON.parse(process.env.INKWELL_STEPS ?? '[["wait", 1500], ["shot", "main"]]') as [string, string | number][]
+  const out = process.env.LETTERWING_CAPTURE!
+  const steps = JSON.parse(process.env.LETTERWING_STEPS ?? '[["wait", 1500], ["shot", "main"]]') as [string, string | number][]
   win.setSize(1400, 860)
   await new Promise((r) => setTimeout(r, 1200))
   win.webContents.on('console-message', (e) => console.log('[renderer]', e.level, e.message))

@@ -182,7 +182,7 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
             ))}
             <details className="advanced">
               <summary>Advanced: use your own sign-in app registration</summary>
-              <p className="hint">Leave these empty to use the sign-in built into Inkwell. Only for testing a different Microsoft or Google app registration.</p>
+              <p className="hint">Leave these empty to use the sign-in built into Letterwing. Only for testing a different Microsoft or Google app registration.</p>
               <div className="row">
                 <label className="grow">
                   Microsoft app (client) ID

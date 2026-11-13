@@ -31,7 +31,7 @@ export interface Account {
   clientId?: string
   /** Microsoft tenant: 'common', 'organizations' or a tenant GUID/domain */
   tenant?: string
-  /** Name shown to recipients, e.g. "Vivian Hodgkinson". The account `name` is only a label in Inkwell. */
+  /** Name shown to recipients, e.g. "Vivian Hodgkinson". The account `name` is only a label in Letterwing. */
   senderName?: string
   /** HTML signature for new messages */
   signature?: string

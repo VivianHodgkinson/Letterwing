@@ -388,7 +388,7 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">Inkwell</div>
+        <div className="brand">Letterwing</div>
         <div className="tabs mode-tabs">
           <button className={mode === 'mail' ? 'active' : ''} onClick={() => setMode('mail')} title="Mail (Ctrl+1)">
             ✉ Mail
@@ -467,7 +467,7 @@ export function App() {
         />
         {accounts.length === 0 ? (
           <div className="empty-state">
-            <h1>Welcome to Inkwell</h1>
+            <h1>Welcome to Letterwing</h1>
             <p>Add a Microsoft 365, Gmail or any IMAP account to get started.</p>
             <button className="primary" onClick={() => setDialog('account')}>
               Add account

@@ -3,7 +3,7 @@ import type { AccountKind } from '@shared/types'
 import { getSettings } from './store'
 
 /**
- * The sign-in apps built into this copy of Inkwell (from .env.local at build time). A value in
+ * The sign-in apps built into this copy of Letterwing (from .env.local at build time). A value in
  * Settings → Advanced overrides them, for someone testing their own registration.
  */
 export function oauthClients() {

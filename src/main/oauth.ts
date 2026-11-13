@@ -32,7 +32,7 @@ function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>): Provi
   if (account.kind === 'microsoft') {
     const tenant = account.tenant || built.microsoft.tenant
     const clientId = account.clientId || built.microsoft.clientId
-    if (!clientId) throw new Error("This copy of Inkwell wasn't built with Microsoft sign-in. Whoever builds it adds it once (docs/SETUP.md).")
+    if (!clientId) throw new Error("This copy of Letterwing wasn't built with Microsoft sign-in. Whoever builds it adds it once (docs/SETUP.md).")
     return {
       authorize: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
       token: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
@@ -43,7 +43,7 @@ function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>): Provi
   }
   if (account.kind === 'google') {
     const clientId = account.clientId || built.google.clientId
-    if (!clientId) throw new Error("This copy of Inkwell wasn't built with Google sign-in. Whoever builds it adds it once (docs/SETUP.md).")
+    if (!clientId) throw new Error("This copy of Letterwing wasn't built with Google sign-in. Whoever builds it adds it once (docs/SETUP.md).")
     return {
       authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
       token: 'https://oauth2.googleapis.com/token',
@@ -76,8 +76,8 @@ export async function signIn(account: Pick<Account, 'kind' | 'clientId' | 'tenan
       const error = url.searchParams.get('error_description') || url.searchParams.get('error')
       const ok = !error && url.searchParams.get('state') === state && url.searchParams.get('code')
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(`<!doctype html><title>Inkwell</title><body style="font-family:system-ui;padding:3em">
-        <h2>${ok ? 'Signed in.' : 'Sign-in failed.'}</h2><p>${ok ? 'You can close this tab and return to Inkwell.' : 'Return to Inkwell for details.'}</p>`)
+      res.end(`<!doctype html><title>Letterwing</title><body style="font-family:system-ui;padding:3em">
+        <h2>${ok ? 'Signed in.' : 'Sign-in failed.'}</h2><p>${ok ? 'You can close this tab and return to Letterwing.' : 'Return to Letterwing for details.'}</p>`)
       clearTimeout(timer)
       server.close()
       if (ok) resolve({ code: url.searchParams.get('code')!, redirectUri })

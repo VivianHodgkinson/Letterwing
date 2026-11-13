@@ -356,7 +356,7 @@ function parseState(state: string | null): GState | null {
     const s = JSON.parse(state) as GState
     return s.delta ? s : null
   } catch {
-    return null // a state from an older Inkwell build: resync
+    return null // a state from an older Letterwing build: resync
   }
 }
 

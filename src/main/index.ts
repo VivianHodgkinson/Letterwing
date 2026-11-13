@@ -30,7 +30,7 @@ function createWindow(): void {
     minHeight: 560,
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0d12' : '#ffffff',
-    title: 'Inkwell',
+    title: 'Letterwing',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' && existsSync(devIcon) ? { icon: devIcon } : {}),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: captureMode }
@@ -119,7 +119,7 @@ async function relocate(keys: string[], target: (accountId: string, fromFolderId
 
 let tempRoot: string | null = null
 async function tempFile(filename: string, content: Buffer): Promise<string> {
-  tempRoot ??= await mkdtemp(join(app.getPath('temp'), 'inkwell-'))
+  tempRoot ??= await mkdtemp(join(app.getPath('temp'), 'letterwing-'))
   const dir = await mkdtemp(join(tempRoot, 'a-'))
   const path = join(dir, safeName(filename))
   await writeFile(path, content, { mode: 0o600 })
@@ -422,7 +422,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => app.quit())
-// Opened and forwarded attachments live in temp files only while Inkwell runs
+// Opened and forwarded attachments live in temp files only while Letterwing runs
 app.on('will-quit', () => {
   if (tempRoot) rmSync(tempRoot, { recursive: true, force: true })
 })

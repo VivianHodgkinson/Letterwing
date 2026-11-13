@@ -1,4 +1,4 @@
-# Inkwell
+# Letterwing
 
 A customisable desktop mail and calendar client: the parts of Classic worth keeping, without being stuck with it.
 Built with Electron, React and TypeScript, the same stack as [Verdigit](../Verdigit).
@@ -60,11 +60,11 @@ action is one entry in `ACTIONS` plus a handler in `App.tsx`. `F12` opens devtoo
 
 ## Checking UI changes without clicking
 
-`INKWELL_CAPTURE` runs the app in an offscreen window on a profile of your choice, performs scripted steps and saves
+`LETTERWING_CAPTURE` runs the app in an offscreen window on a profile of your choice, performs scripted steps and saves
 screenshots, then quits:
 
 ```sh
-INKWELL_PROFILE=/tmp/inkwell-test INKWELL_CAPTURE=/tmp/shots \
-INKWELL_STEPS='[["wait",1500],["shot","inbox"],["js","document.querySelector(\".msg\").click()"],["wait",800],["shot","reader"]]' \
+LETTERWING_PROFILE=/tmp/letterwing-test LETTERWING_CAPTURE=/tmp/shots \
+LETTERWING_STEPS='[["wait",1500],["shot","inbox"],["js","document.querySelector(\".msg\").click()"],["wait",800],["shot","reader"]]' \
 npx electron .
 ```

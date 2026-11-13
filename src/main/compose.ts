@@ -38,7 +38,7 @@ export async function compile(
         ...inline.map((i) => ({ cid: i.cid, filename: i.filename, content: i.content, contentType: i.contentType, contentDisposition: 'inline' })),
         ...(withFiles ? files.map((f) => ({ filename: f.filename, content: f.content, contentType: f.contentType })) : [])
       ],
-      headers: { 'X-Mailer': 'Inkwell' }
+      headers: { 'X-Mailer': 'Letterwing' }
     }).compile()
     // Bcc never appears in a sent message's headers, but a draft needs it to survive being reopened
     node.keepBcc = opts.forDraft
@@ -60,7 +60,7 @@ export function embedDataImages(html: string): { html: string; inline: (Attachme
     // The same logo used twice is attached once
     let cid = seen.get(data)
     if (!cid) {
-      cid = `img${inline.length + 1}.${Date.now().toString(36)}@inkwell`
+      cid = `img${inline.length + 1}.${Date.now().toString(36)}@letterwing`
       seen.set(data, cid)
       const ext = type.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') ?? 'png'
       inline.push({ cid, filename: `image${inline.length + 1}.${ext}`, contentType: type, content: Buffer.from(data.replace(/\s/g, ''), 'base64') })
@@ -108,7 +108,7 @@ export async function compileInviteReply(account: Account, to: { name: string; a
       subject,
       text: note,
       icalEvent: { method: 'REPLY', content: ics },
-      headers: { 'X-Mailer': 'Inkwell' }
+      headers: { 'X-Mailer': 'Letterwing' }
     })
       .compile()
       .build()

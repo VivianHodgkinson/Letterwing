@@ -3,7 +3,7 @@ import type { Account, MessageSummary } from '@shared/types'
 import { hue, initials, shortDate, who } from '../format'
 
 /** Drag payload when messages are dragged onto a folder */
-export const DRAG_TYPE = 'application/x-inkwell-messages'
+export const DRAG_TYPE = 'application/x-letterwing-messages'
 
 interface Props {
   messages: MessageSummary[]

@@ -325,7 +325,7 @@ const SUMMARY = { uid: true, envelope: true, flags: true, bodyStructure: true, i
 
 function summarise(m: FetchMessageObject): RemoteSummary {
   const e = m.envelope
-  const messageId = e?.messageId || `<uid-${m.uid}@inkwell.local>`
+  const messageId = e?.messageId || `<uid-${m.uid}@letterwing.local>`
   const refs = m.headers ? (m.headers.toString().match(/<[^>]+>/g) ?? []) : []
   return {
     remoteId: String(m.uid),

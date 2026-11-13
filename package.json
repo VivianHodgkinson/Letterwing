@@ -1,7 +1,7 @@
 {
-  "name": "inkwell",
+  "name": "letterwing",
   "version": "0.1.0",
-  "description": "Inkwell: a customisable desktop mail and calendar client",
+  "description": "Letterwing: a customisable desktop mail and calendar client",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -13,11 +13,11 @@
   },
   "author": "Vivian Hodgkinson",
   "license": "MIT",
-  "productName": "Inkwell",
+  "productName": "Letterwing",
   "build": {
-    "appId": "za.co.issuesoftware.inkwell",
-    "productName": "Inkwell",
-    "executableName": "inkwell",
+    "appId": "za.co.issuesoftware.letterwing",
+    "productName": "Letterwing",
+    "executableName": "letterwing",
     "files": [
       "out/**/*",
       "package.json"

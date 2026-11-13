@@ -14,7 +14,7 @@ type Detected = Awaited<ReturnType<typeof api.detectProvider>>
 const PROVIDER: Record<AccountKind, string> = { google: 'Google', microsoft: 'Microsoft', imap: 'your mail provider' }
 
 /**
- * Add an account the way Classic does: type your address, Inkwell works out who hosts it,
+ * Add an account the way Classic does: type your address, Letterwing works out who hosts it,
  * and Google / Microsoft accounts sign in through the browser. Server settings only appear
  * for other providers (or if you ask for them).
  */
@@ -159,11 +159,11 @@ export function AccountDialog({ onClose, onAdded }: Props) {
         {oauth && (
           <>
             <p className="signin-blurb">
-              Your browser opens so you can sign in with {PROVIDER[kind]}, including two-step verification. Inkwell never sees your password; it gets a
+              Your browser opens so you can sign in with {PROVIDER[kind]}, including two-step verification. Letterwing never sees your password; it gets a
               revocable token, kept in your system keyring.
             </p>
             {unavailable && (
-              <div className="error">This copy of Inkwell wasn't built with {PROVIDER[kind]} sign-in yet. Whoever builds it sets that up once (docs/SETUP.md).</div>
+              <div className="error">This copy of Letterwing wasn't built with {PROVIDER[kind]} sign-in yet. Whoever builds it sets that up once (docs/SETUP.md).</div>
             )}
           </>
         )}
@@ -187,7 +187,7 @@ export function AccountDialog({ onClose, onAdded }: Props) {
         )}
 
         <details>
-          <summary>How it looks in Inkwell</summary>
+          <summary>How it looks in Letterwing</summary>
           <div className="row">
             <label className="grow">
               Account label
