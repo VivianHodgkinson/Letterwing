@@ -114,7 +114,7 @@ async function exchange(p: Provider, body: Record<string, string>, previousRefre
   const form = new URLSearchParams({ client_id: p.clientId, ...body })
   if (p.clientSecret) form.set('client_secret', p.clientSecret)
   if (p.token.includes('microsoftonline')) form.set('scope', p.scopes.join(' '))
-  const res = await fetch(p.token, { method: 'POST', body: form })
+  const res = await post(p.token, form)
   const json = (await res.json()) as Record<string, unknown>
   if (!res.ok) throw new Error(`Token request failed: ${json.error_description ?? json.error ?? res.status}`)
   return {
@@ -134,4 +134,23 @@ export async function accessToken(account: Account): Promise<string> {
   const fresh = await exchange(provider(account), { grant_type: 'refresh_token', refresh_token: tokens.refreshToken }, tokens.refreshToken)
   setSecret(account.id, JSON.stringify(fresh))
   return fresh.accessToken
+}
+
+/**
+ * POST to a token endpoint, retrying network hiccups. Node's fetch only says "fetch failed";
+ * the reason (DNS, timeout, refused, TLS) is in error.cause, so put it in the message.
+ */
+async function post(url: string, body: URLSearchParams): Promise<Response> {
+  const host = new URL(url).host
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, { method: 'POST', body, signal: AbortSignal.timeout(20_000) })
+    } catch (e) {
+      const cause = (e as { cause?: { code?: string; message?: string } }).cause
+      const why = cause?.code ?? cause?.message ?? (e as Error).message
+      console.error(`[oauth] POST ${host} failed (attempt ${attempt}):`, why, cause ?? e)
+      if (attempt >= 3) throw new Error(`Couldn't reach ${host} (${why}). Check your internet connection and try again.`)
+      await new Promise((r) => setTimeout(r, 800 * attempt))
+    }
+  }
 }
