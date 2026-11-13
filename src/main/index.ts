@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { existsSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { detectMimeType } from 'nodemailer/lib/mime-funcs'
@@ -15,6 +15,8 @@ import * as store from './store'
 import * as sync from './sync'
 import * as calendar from './calendar'
 import { detectProvider } from './signin'
+import { createTray, hasTray, iconPath, setTrayUnread } from './tray'
+import { checkForUpdates, getUpdateStatus, initUpdater, installUpdate, openReleasePage, showUpdateFile } from './updater'
 import { captureMode, runCapture, useProfileOverride } from './devcapture'
 
 useProfileOverride()
@@ -29,7 +31,8 @@ if (process.platform === 'linux' && !app.commandLine.hasSwitch('password-store')
   app.commandLine.appendSwitch('password-store', process.env.LETTERWING_PASSWORD_STORE || 'gnome-libsecret')
 
 let win: BrowserWindow | null = null
-const devIcon = join(__dirname, '../../resources/icon.png')
+/** True once the user really quits (tray menu, Cmd+Q), so closing the window can hide it instead */
+let quitting = false
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -41,7 +44,7 @@ function createWindow(): void {
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0d12' : '#ffffff',
     title: 'Letterwing',
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' && existsSync(devIcon) ? { icon: devIcon } : {}),
+    ...(process.platform === 'linux' && iconPath(256) ? { icon: iconPath(256) } : {}),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: captureMode }
   })
   if (captureMode) win.webContents.once('did-finish-load', () => void runCapture(win!))
@@ -64,9 +67,24 @@ function createWindow(): void {
     // Forward them; the renderer only acts on these when the mail frame actually has focus.
     else send('key:forward', { key: input.key, code: input.code, ctrlKey: input.control, altKey: input.alt, shiftKey: input.shift, metaKey: input.meta })
   })
+  // With "keep running in the tray" on, closing the window (including Hyprland's Super+Q) only hides it
+  win.on('close', (e) => {
+    if (!quitting && store.getSettings().closeToTray && hasTray()) {
+      e.preventDefault()
+      win?.hide()
+    }
+  })
   win.on('closed', () => (win = null))
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(join(__dirname, '../renderer/index.html'))
+}
+
+/** Bring the window back from the tray, minimised or closed */
+function showWindow(): void {
+  if (!win) createWindow()
+  if (win!.isMinimized()) win!.restore()
+  win!.show()
+  win!.focus()
 }
 
 function send(channel: string, payload: unknown): void {
@@ -300,6 +318,11 @@ const api: Api = {
     await writeFile(r.filePath, a.content)
     return true
   },
+  getUpdateStatus: async () => getUpdateStatus(),
+  checkForUpdates: () => checkForUpdates(),
+  installUpdate: () => installUpdate(),
+  showUpdateFile: async () => showUpdateFile(),
+  openReleasePage: async () => openReleasePage(),
   async syncStatus() {
     return sync.statuses()
   },
@@ -383,10 +406,7 @@ function notifyNewMail(acc: Account, messages: MessageSummary[]): void {
     silent: false
   })
   n.on('click', () => {
-    if (!win) return
-    if (win.isMinimized()) win.restore()
-    win.show()
-    win.focus()
+    showWindow()
     send('open:message', { key: newest.key })
   })
   n.show()
@@ -403,12 +423,8 @@ ipcMain.handle('api', async (_e, method: ApiMethod, args: unknown[]): Promise<Ip
 })
 
 if (!app.requestSingleInstanceLock()) app.quit()
-app.on('second-instance', () => {
-  if (win) {
-    if (win.isMinimized()) win.restore()
-    win.focus()
-  }
-})
+// Launching Letterwing again (menu, dock, desktop file) brings back the running copy
+app.on('second-instance', () => showWindow())
 
 app.whenReady().then(() => {
   // Electron's default menu owns Ctrl+R (reload), Ctrl+Q (quit on Linux), Ctrl+W and others, which would
@@ -418,19 +434,39 @@ app.whenReady().then(() => {
   db.openDb()
   sync.init(send, notifyNewMail)
   createWindow()
-  calendar.init(send, () => {
-    if (!win) return
-    if (win.isMinimized()) win.restore()
-    win.show()
-    win.focus()
-  })
+  calendar.init(send, showWindow)
+  if (!captureMode)
+    createTray({
+      show: showWindow,
+      newMessage: () => {
+        showWindow()
+        send('compose:new', {})
+      },
+      sync: () => void api.syncNow(),
+      quit: () => {
+        quitting = true
+        app.quit()
+      }
+    })
+  // Tray tooltip shows unread inbox mail across accounts
+  const unread = () =>
+    setTrayUnread(store.getAccounts().reduce((n, a) => n + (db.folderByRole(a.id, 'inbox')?.unread ?? 0), 0))
+  unread()
+  setInterval(unread, 30_000)
+  initUpdater((s) => send('update:status', s), () => store.getSettings().autoUpdate)
   sync.schedule(store.getSettings().syncInterval)
   // Calendars refresh with the mail, after it so the inbox comes first
   sync.onCycle(() => void calendar.syncAll())
   void sync.syncAll().then(() => calendar.syncAll())
 })
 
-app.on('window-all-closed', () => app.quit())
+app.on('before-quit', () => (quitting = true))
+// macOS: clicking the Dock icon reopens the window
+app.on('activate', () => showWindow())
+// Without a tray there's no way back to a hidden app, so then closing the last window quits
+app.on('window-all-closed', () => {
+  if (!hasTray() || !store.getSettings().closeToTray) app.quit()
+})
 // Opened and forwarded attachments live in temp files only while Letterwing runs
 app.on('will-quit', () => {
   if (tempRoot) rmSync(tempRoot, { recursive: true, force: true })

@@ -1,4 +1,4 @@
-import type { Account, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus } from './types'
+import type { Account, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
 
 /** Paging position in a message list: the last row shown */
 export interface Cursor {
@@ -42,6 +42,11 @@ export interface Api {
   saveAttachment(key: string, attachmentId: string): Promise<boolean>
   syncNow(accountId?: string): Promise<void>
   syncStatus(): Promise<SyncStatus[]>
+  getUpdateStatus(): Promise<UpdateStatus>
+  checkForUpdates(): Promise<UpdateStatus>
+  installUpdate(): Promise<void>
+  showUpdateFile(): Promise<void>
+  openReleasePage(): Promise<void>
 
   // writing
   suggestContacts(prefix: string): Promise<Contact[]>
@@ -70,5 +75,5 @@ export type ApiMethod = keyof Api
 export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: string }
 
 /** Push events from main to renderer */
-export type EventChannel = 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message' | 'calendar:changed' | 'open:event'
+export type EventChannel = 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message' | 'calendar:changed' | 'open:event' | 'update:status' | 'compose:new'
 export type SyncEvent = SyncStatus

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Account, Settings } from '@shared/types'
 import { KeybindingsEditor } from './KeybindingsEditor'
+import { UpdateSettings } from './Updates'
 
 interface Props {
   settings: Settings
@@ -120,6 +121,12 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
               <input type="checkbox" checked={settings.notifications} onChange={(e) => void onChange({ notifications: e.target.checked })} />
               Desktop notification for new mail
             </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.closeToTray} onChange={(e) => void onChange({ closeToTray: e.target.checked })} />
+              Keep running in the tray when the window is closed (new mail and reminders keep coming)
+            </label>
+            <h3>Updates</h3>
+            <UpdateSettings autoUpdate={settings.autoUpdate} onAutoUpdate={(v) => void onChange({ autoUpdate: v })} />
           </>
         )}
 

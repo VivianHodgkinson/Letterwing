@@ -36,6 +36,8 @@ export const DEFAULT_SETTINGS: Settings = {
   workDayStart: 8,
   workDayEnd: 17,
   reminderMinutes: 15,
+  autoUpdate: true,
+  closeToTray: true,
   notifications: true,
   keymapPreset: 'classic',
   keybindings: {},

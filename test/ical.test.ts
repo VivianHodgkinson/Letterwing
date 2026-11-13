@@ -1,7 +1,7 @@
+// @tz Africa/Johannesburg
 import assert from 'node:assert/strict'
 import { buildEventIcs, buildInviteReply, eventsFromIcs, parseInvite, setMyResponse, updateEventIcs } from '../src/main/ical'
 
-process.env.TZ = 'Africa/Johannesburg'
 const me = { name: 'Test User', address: 'me@issue.test' }
 
 // business-style: Windows zone name with its own VTIMEZONE, weekly series, one moved and one cancelled occurrence

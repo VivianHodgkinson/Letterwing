@@ -9,7 +9,8 @@ Desktop apps can't keep secrets, so these IDs identify the app rather than prote
 PKCE, the user's own Google/Microsoft login (with MFA), and tokens kept in the OS keyring. Still, keep them out of
 public repositories.
 
-After editing `.env.local`, restart `npm run dev` (or rebuild).
+After editing `.env.local`, restart `npm run dev` (or rebuild). For CI builds, put the same values in the repository
+secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID` and `MICROSOFT_TENANT`.
 
 ## Microsoft 365 / Exchange Online / personal Microsoft accounts
 
@@ -43,7 +44,9 @@ After editing `.env.local`, restart `npm run dev` (or rebuild).
        don't need that:
        - *Testing*: add each person under **Test users** (up to 100). They see a "Google hasn't verified this app"
          screen once. **Sign-ins expire after 7 days** in this mode, so people re-sign weekly.
-       - *In production, unverified*: click **Publish app** and skip verification. Same warning screen, up to 100
+       - *In production, unverified*: fill in **Branding** (homepage `https://vivianhodgkinson.github.io/Letterwing/`,
+         privacy policy `https://vivianhodgkinson.github.io/Letterwing/privacy.html`, authorised domain
+         `vivianhodgkinson.github.io`), then click **Publish app** and skip verification. Same warning screen, up to 100
          users, but sign-ins don't expire. This is the practical choice for a small team.
 4. **Data access → Add scopes**: `https://mail.google.com/`, `https://www.googleapis.com/auth/calendar`, `openid`,
    `email`.

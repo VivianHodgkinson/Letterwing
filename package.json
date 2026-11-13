@@ -1,7 +1,7 @@
 {
   "name": "letterwing",
   "version": "0.1.0",
-  "description": "Letterwing: a customisable desktop mail and calendar client",
+  "description": "Letterwing: a customisable desktop mail and calendar client for Microsoft 365, Gmail and any IMAP account",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -9,7 +9,10 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist:linux": "electron-vite build && electron-builder --linux --publish never",
-    "test": "esbuild test/*.test.ts --bundle --platform=node --format=esm --packages=external --alias:electron=./test/electron-stub.ts --alias:@shared=./src/shared --outdir=out/test --out-extension:.js=.mjs --log-level=warning && for t in out/test/*.test.mjs; do ELECTRON_RUN_AS_NODE=1 electron $t || exit 1; done"
+    "test": "esbuild test/*.test.ts --bundle --platform=node --format=esm --packages=external --alias:electron=./test/electron-stub.ts --alias:@shared=./src/shared --outdir=out/test --out-extension:.js=.mjs --log-level=warning && node test/run.mjs",
+    "dist": "electron-vite build && electron-builder --publish never",
+    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never"
   },
   "author": "Vivian Hodgkinson",
   "license": "MIT",
@@ -18,25 +21,180 @@
     "appId": "za.co.issuesoftware.letterwing",
     "productName": "Letterwing",
     "executableName": "letterwing",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
       "out/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/icons",
+        "to": "icons"
+      }
     ],
     "directories": {
       "output": "dist",
       "buildResources": "resources"
     },
-    "linux": {
-      "category": "Office",
+    "publish": {
+      "provider": "github",
+      "owner": "VivianHodgkinson",
+      "repo": "Letterwing",
+      "releaseType": "draft"
+    },
+    "win": {
+      "icon": "resources/icon.ico",
       "target": [
-        "AppImage",
-        "rpm",
-        "deb"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Letterwing",
+      "artifactName": "${productName}-${version}-setup-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable-${arch}.${ext}"
+    },
+    "mac": {
+      "icon": "resources/icon.png",
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "resources/icons",
+      "category": "Office;Email;Calendar",
+      "synopsis": "Mail and calendar for Microsoft 365, Gmail and IMAP",
+      "description": "A customisable desktop mail and calendar client: Microsoft 365, Gmail and any IMAP account, conversations, offline search, business-style shortcuts and themes.",
+      "maintainer": "Vivian Hodgkinson",
+      "vendor": "Vivian Hodgkinson",
+      "desktop": {
+        "entry": {
+          "Name": "Letterwing",
+          "GenericName": "Mail and Calendar",
+          "Keywords": "mail;email;calendar;classic;imap;gmail;"
+        }
+      },
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "pacman",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "syncDesktopName": true
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "xdg-utils",
+        "libgtk-3.so.0()(64bit)",
+        "libnss3.so()(64bit)",
+        "libXss.so.1()(64bit)",
+        "libXtst.so.6()(64bit)",
+        "libatk-bridge-2.0.so.0()(64bit)",
+        "libuuid.so.1()(64bit)",
+        "libasound.so.2()(64bit)",
+        "libsecret-1.so.0()(64bit)"
+      ],
+      "fpm": [
+        "--rpm-rpmbuild-define",
+        "_build_id_links none"
+      ]
+    },
+    "pacman": {
+      "depends": [
+        "gtk3",
+        "nss",
+        "alsa-lib",
+        "libxss",
+        "libxtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "libsecret"
       ]
     }
   },
   "dependencies": {
     "dompurify": "^3.4.17",
+    "electron-updater": "^6.8.11",
     "ical.js": "^2.2.1",
     "imapflow": "^2.11.0",
     "mailparser": "^3.14.3",
@@ -60,5 +218,11 @@
     "smtp-server": "^3.21.4",
     "typescript": "^7.0.2",
     "vite": "^7.3.8"
-  }
+  },
+  "homepage": "https://vivianhodgkinson.github.io/Letterwing/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VivianHodgkinson/Letterwing.git"
+  },
+  "desktopName": "letterwing.desktop"
 }

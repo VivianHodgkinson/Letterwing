@@ -1,17 +1,56 @@
 # Letterwing
 
-A customisable desktop mail and calendar client: the parts of Classic worth keeping, without being stuck with it.
-Built with Electron, React and TypeScript, the same stack as [Verdigit](../Verdigit).
+<img src="docs/img/icon.png" width="96" align="right" alt="">
+
+A customisable desktop mail and calendar app for **Microsoft 365, Gmail and any IMAP account**: the parts of Classic
+worth keeping, without being stuck with it. Windows, macOS and Linux. Website: https://vivianhodgkinson.github.io/Letterwing/
+
+![Letterwing](docs/img/mail.webp)
+
+## Install
+
+Download from the [Releases page](https://github.com/VivianHodgkinson/Letterwing/releases/latest), then **+ Add account**:
+type your address and sign in with Microsoft or Google in your browser.
+
+| Platform | File | Install |
+| --- | --- | --- |
+| Windows 10/11 | `Letterwing-<ver>-setup-x64.exe` (or `arm64`) | Run the installer. A `-portable-x64.exe` that needs no install is also provided. |
+| macOS | `Letterwing-<ver>-mac-arm64.dmg` (Apple silicon) or `-x64.dmg` (Intel) | Open the .dmg and drag Letterwing to Applications. |
+| Fedora, RHEL, openSUSE | `.rpm` | `sudo dnf install ./Letterwing-<ver>-linux-x86_64.rpm` |
+| Ubuntu, Debian, Mint | `.deb` | `sudo apt install ./Letterwing-<ver>-linux-amd64.deb` |
+| Arch, Manjaro | `.pacman` | `sudo pacman -U ./Letterwing-<ver>-linux-x64.pacman` |
+| Any other distro | `.AppImage` / `.tar.gz` | `chmod +x Letterwing-*.AppImage && ./Letterwing-*.AppImage` |
+
+The builds are not code-signed yet: on Windows click *More info → Run anyway* on the SmartScreen prompt, and on macOS
+right-click the app and choose *Open* the first time.
+
+**Updates:** the Windows installer and the AppImage update themselves (a *Restart to update* button appears). The
+portable exe, the Linux packages and macOS show a *vX available* button that downloads the new file.
+
+## Building from source
 
 ```sh
 npm install
-npm run dev        # hot reload
-npm test           # cache, compose, keymap and IMAP/SMTP end-to-end tests (in-memory servers, no network)
+npm run dev          # hot reload
+npm test             # cache, compose, calendar, keymap and IMAP/SMTP end-to-end tests (in-memory servers, no network)
 npm run typecheck
-npm run dist:linux
+npm run dist:linux   # or dist:win / dist:mac (each on its own OS; CI builds all three)
 ```
 
-First run: see [docs/SETUP.md](docs/SETUP.md) to register the Microsoft / Google apps, then **+ Add account**.
+The *Sign in with Google / Microsoft* buttons need sign-in apps registered once by whoever builds Letterwing; see
+[docs/SETUP.md](docs/SETUP.md). Without them, IMAP accounts still work.
+
+## Releasing
+
+CI (`.github/workflows/build.yml`) tests on Linux, Windows and macOS and builds every package on each push. To release:
+
+```sh
+npm version 0.2.0          # bumps package.json and creates the v0.2.0 tag
+git push --follow-tags
+```
+
+The tag build uploads all installers to a **draft** GitHub Release; review it and click *Publish*. The sign-in IDs
+come from repository secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT`.
 
 ## Architecture
 

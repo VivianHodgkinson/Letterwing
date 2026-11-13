@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Letterwing privacy policy</title>
+    <link rel="icon" href="img/favicon.png" />
+    <style>
+      body { margin: 0; background: #0b0d12; color: #dfe4ee; font: 16px/1.65 'Inter', 'Segoe UI', system-ui, sans-serif; }
+      .wrap { max-width: 780px; margin: 0 auto; padding: 30px 20px 60px; }
+      a { color: #9db2ff; }
+      header { display: flex; align-items: center; gap: 10px; margin-bottom: 30px; }
+      header img { width: 32px; height: 32px; }
+      header a { color: #dfe4ee; text-decoration: none; font-weight: 700; }
+      h1 { font-size: 2em; margin: 0 0 4px; }
+      h2 { font-size: 1.2em; margin: 30px 0 6px; }
+      .dim { color: #9aa3b5; }
+      li { margin: 4px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <img src="img/icon.png" alt="" />
+        <a href="./">Letterwing</a>
+      </header>
+
+      <h1>Privacy policy</h1>
+      <p class="dim">Last updated 13 November 2026</p>
+
+      <p>
+        Letterwing is a desktop email and calendar app. It runs entirely on your own computer. There is no Letterwing server, no Letterwing account and no
+        analytics: the people who make Letterwing never receive your email, calendar, contacts or any information about how you use the app.
+      </p>
+
+      <h2>What Letterwing accesses</h2>
+      <p>When you add an account, Letterwing connects directly from your computer to that account's provider:</p>
+      <ul>
+        <li><b>Google accounts</b>: Gmail (to read, organise, send and draft your email) and Google Calendar (to show, create and answer events).</li>
+        <li><b>Microsoft accounts</b>: your mail and calendar through Microsoft Graph, for the same purposes.</li>
+        <li><b>Other accounts</b>: your mail server (IMAP and SMTP) and, if you set one up, your CalDAV calendar server.</li>
+      </ul>
+      <p>It only does what you ask it to: showing your messages and events, sending what you write, and making the changes you make.</p>
+
+      <h2>Where your data is kept</h2>
+      <ul>
+        <li>
+          Copies of your messages, events and folder lists are cached in the app's data folder on your computer, so the app is fast and works offline.
+        </li>
+        <li>
+          Sign-in tokens and passwords are encrypted by your operating system's keychain (Windows Credential protection, macOS Keychain, or KWallet / GNOME
+          Keyring on Linux). Letterwing never sees your Google or Microsoft password; you sign in in your own web browser.
+        </li>
+        <li>Nothing is sent anywhere except to your own email and calendar providers, with three small exceptions you can see below.</li>
+      </ul>
+
+      <h2>Other connections the app makes</h2>
+      <ul>
+        <li>When you add an account, Letterwing looks up your email domain's mail (MX) records in DNS to tell whether it's hosted by Google or Microsoft.</li>
+        <li>Images inside an email that are hosted elsewhere load only when you click "Load images" (or turn that on in Settings), as in any mail app.</li>
+        <li>Calendar subscriptions you add (for example public holidays) are downloaded from the link you gave.</li>
+      </ul>
+
+      <h2>Sharing</h2>
+      <p>
+        Letterwing does not sell, share or transfer your data to anyone. It does not use your data for advertising, and it does not use it to train AI or
+        machine-learning models.
+      </p>
+
+      <h2>Google user data</h2>
+      <p>
+        Letterwing's use and transfer of information received from Google APIs adheres to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use
+        requirements. Data from Gmail and Google Calendar is used only to provide the email and calendar features you see in the app, on your own device.
+      </p>
+
+      <h2>Updates</h2>
+      <p>
+        To tell you about new versions, Letterwing checks the public
+        <a href="https://github.com/VivianHodgkinson/Letterwing/releases">GitHub releases page</a> from time to time. That request contains no personal
+        information. You can turn it off in Settings → General.
+      </p>
+
+      <h2>Removing your data</h2>
+      <ul>
+        <li>Removing an account in Settings → Accounts deletes its cached data and its stored sign-in from your computer.</li>
+        <li>
+          You can also revoke Letterwing's access at any time: <a href="https://myaccount.google.com/permissions">Google account permissions</a> or
+          <a href="https://myapps.microsoft.com/">Microsoft My Apps</a>.
+        </li>
+        <li>Uninstalling Letterwing and deleting its data folder removes everything it stored.</li>
+      </ul>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about this policy: open an issue at
+        <a href="https://github.com/VivianHodgkinson/Letterwing/issues">github.com/VivianHodgkinson/Letterwing/issues</a>.
+      </p>
+    </div>
+  </body>
+</html>

@@ -257,6 +257,10 @@ export interface Settings {
   /** Working hours: the time grid scrolls here and shades the rest */
   workDayStart: number
   workDayEnd: number
+  /** Check GitHub for new versions */
+  autoUpdate: boolean
+  /** Closing the window keeps Letterwing running in the tray, so new mail and reminders still arrive */
+  closeToTray: boolean
   /** Minutes before an event to show a reminder; 0 turns reminders off */
   reminderMinutes: number
   /** Minutes between background syncs */
@@ -272,4 +276,23 @@ export interface SyncStatus {
   state: 'idle' | 'syncing' | 'error'
   message?: string
   at: number
+}
+
+export interface UpdateStatus {
+  currentVersion: string
+  /** auto: downloads and installs itself; notify: links to the release; disabled: dev build */
+  mode: 'auto' | 'notify' | 'disabled'
+  /** ready: auto-update downloaded, restart to install; downloaded: package saved to Downloads for the user to install */
+  state: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'downloaded' | 'up-to-date' | 'error'
+  version?: string
+  progress?: number
+  error?: string
+  releaseUrl?: string
+  lastChecked?: number
+  /** Release file matching this install (notify mode) */
+  assetName?: string
+  /** Where that file was downloaded */
+  file?: string
+  /** Command to install a downloaded Linux package */
+  installCommand?: string
 }

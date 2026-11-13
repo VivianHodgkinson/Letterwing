@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Letterwing: mail and calendar for Microsoft 365, Gmail and IMAP</title>
+    <meta name="description" content="A fast, customisable desktop mail and calendar app for Windows, macOS and Linux. Microsoft 365, Gmail and any IMAP account, with business-style shortcuts." />
+    <link rel="icon" href="img/favicon.png" />
+    <style>
+      :root {
+        --bg: #0b0d12;
+        --panel: #11141b;
+        --line: #232937;
+        --text: #dfe4ee;
+        --dim: #9aa3b5;
+        --accent: #6c8cff;
+        --accent-2: #9db2ff;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 'Inter', 'Segoe UI', system-ui, sans-serif; }
+      a { color: var(--accent-2); }
+      .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+      header { display: flex; align-items: center; gap: 12px; padding: 22px 0; }
+      header img { width: 36px; height: 36px; }
+      header b { font-size: 1.15em; letter-spacing: 0.01em; }
+      header nav { margin-left: auto; display: flex; gap: 20px; font-size: 0.95em; }
+      header nav a { color: var(--dim); text-decoration: none; }
+      header nav a:hover { color: var(--text); }
+      .hero { display: grid; grid-template-columns: 1fr; gap: 28px; padding: 40px 0 30px; text-align: center; }
+      .hero img.logo { width: 112px; height: 112px; margin: 0 auto; }
+      h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.1; margin: 0; letter-spacing: -0.02em; }
+      .lead { color: var(--dim); font-size: 1.15em; max-width: 680px; margin: 0 auto; }
+      .buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+      .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--line); color: var(--text); background: var(--panel); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .btn:hover { filter: brightness(1.1); }
+      .small { color: var(--dim); font-size: 0.85em; }
+      .shot { border-radius: 12px; border: 1px solid var(--line); width: 100%; height: auto; display: block; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+      section { padding: 50px 0; }
+      h2 { font-size: 1.7em; margin: 0 0 6px; letter-spacing: -0.01em; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 24px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+      .card h3 { margin: 0 0 6px; font-size: 1.05em; }
+      .card p { margin: 0; color: var(--dim); font-size: 0.95em; }
+      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: center; }
+      @media (max-width: 820px) { .split { grid-template-columns: 1fr; } header nav { display: none; } }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.95em; }
+      td, th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--dim); font-weight: 600; }
+      code { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 0.9em; }
+      footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--dim); font-size: 0.9em; display: flex; gap: 18px; flex-wrap: wrap; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <img src="img/icon.png" alt="" />
+        <b>Letterwing</b>
+        <nav>
+          <a href="#features">Features</a>
+          <a href="#download">Download</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="https://github.com/VivianHodgkinson/Letterwing">GitHub</a>
+        </nav>
+      </header>
+
+      <div class="hero">
+        <img class="logo" src="img/icon.png" alt="Letterwing icon" />
+        <h1>Your mail and calendar,<br />the way you want them.</h1>
+        <p class="lead">
+          Letterwing is a fast, private desktop app for Microsoft 365, Gmail and any IMAP account. the classic keyboard shortcuts out of the box, and you
+          can change everything about how it looks and works.
+        </p>
+        <div class="buttons">
+          <a class="btn primary" href="https://github.com/VivianHodgkinson/Letterwing/releases/latest">⤓ Download</a>
+          <a class="btn" href="https://github.com/VivianHodgkinson/Letterwing">View source</a>
+        </div>
+        <p class="small">Free and open source (MIT) · Windows, macOS and Linux</p>
+        <img class="shot" src="img/mail.webp" alt="Letterwing showing a unified inbox and a conversation" width="1400" height="860" />
+      </div>
+
+      <section id="features">
+        <h2>Everything you use Classic for</h2>
+        <p class="small">Plus the things you wish it did.</p>
+        <div class="grid">
+          <div class="card">
+            <h3>Sign in, done</h3>
+            <p>Type your address and sign in with Microsoft or Google in your browser, two-step verification included. Letterwing never sees your password.</p>
+          </div>
+          <div class="card">
+            <h3>All your accounts, one inbox</h3>
+            <p>Work and personal side by side, colour-coded, with a unified inbox, conversations and instant search across everything, even offline.</p>
+          </div>
+          <div class="card">
+            <h3>the classic shortcuts</h3>
+            <p>Ctrl+R, Ctrl+Shift+R, Ctrl+Q, Insert, F9... they all work. Prefer single-key shortcuts or your own? Rebind anything, including key sequences.</p>
+          </div>
+          <div class="card">
+            <h3>Calendar and invites</h3>
+            <p>Day, work week, week and month views. Accept or decline invitations straight from the email, see clashes, join Teams calls in one click.</p>
+          </div>
+          <div class="card">
+            <h3>Private by default</h3>
+            <p>Your mail stays on your computer and goes only to your own mail provider. Tracking images are blocked until you choose to load them.</p>
+          </div>
+          <div class="card">
+            <h3>Make it yours</h3>
+            <p>Themes, colours, density and layout: every colour is a setting. Reading pane on the right, at the bottom, or off.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="split">
+        <div>
+          <h2>Write like you're used to</h2>
+          <p class="small">
+            Replies quote the original the Classic way, signatures per account (paste your Classic one, logo and all), drafts saved to your server, attachments by
+            drag and drop, and address suggestions from the people you actually email.
+          </p>
+        </div>
+        <img class="shot" src="img/compose.webp" alt="Writing a reply in Letterwing" width="1400" height="860" loading="lazy" />
+      </section>
+
+      <section class="split">
+        <img class="shot" src="img/calendar.webp" alt="Letterwing calendar, work week view" width="1400" height="860" loading="lazy" />
+        <div>
+          <h2>A calendar that keeps up</h2>
+          <p class="small">
+            Microsoft 365, Google and any CalDAV calendar (iCloud, Fastmail, Nextcloud), plus subscriptions such as public holidays. Reminders keep coming with the
+            window closed: Letterwing waits in the tray.
+          </p>
+        </div>
+      </section>
+
+      <section id="download">
+        <h2>Download</h2>
+        <p class="small">
+          Get the latest version from the <a href="https://github.com/VivianHodgkinson/Letterwing/releases/latest">releases page</a>. Letterwing updates itself
+          (or tells you when there's a new version, for system packages).
+        </p>
+        <table>
+          <tr>
+            <th>System</th>
+            <th>File</th>
+          </tr>
+          <tr>
+            <td>Windows 10 / 11</td>
+            <td><code>Letterwing-…-setup-x64.exe</code> (or <code>arm64</code>). A portable <code>.exe</code> that needs no install is also there.</td>
+          </tr>
+          <tr>
+            <td>macOS</td>
+            <td><code>Letterwing-…-mac-arm64.dmg</code> for Apple silicon, <code>x64</code> for Intel Macs.</td>
+          </tr>
+          <tr>
+            <td>Fedora, RHEL, openSUSE</td>
+            <td><code>.rpm</code>: <code>sudo dnf install ./Letterwing-…-x86_64.rpm</code></td>
+          </tr>
+          <tr>
+            <td>Ubuntu, Debian, Mint</td>
+            <td><code>.deb</code>: <code>sudo apt install ./Letterwing-…-amd64.deb</code></td>
+          </tr>
+          <tr>
+            <td>Arch, Manjaro</td>
+            <td><code>.pacman</code>: <code>sudo pacman -U ./Letterwing-…-x64.pacman</code></td>
+          </tr>
+          <tr>
+            <td>Any Linux</td>
+            <td><code>.AppImage</code> (updates itself) or <code>.tar.gz</code></td>
+          </tr>
+        </table>
+        <p class="small">
+          The builds aren't code-signed yet, so Windows may show "Windows protected your PC" (click <i>More info → Run anyway</i>) and macOS may say it can't check
+          the app (right-click it in Applications and choose <i>Open</i> the first time).
+        </p>
+      </section>
+
+      <footer>
+        <span>© 2026 Vivian Hodgkinson · MIT licence</span>
+        <a href="privacy.html">Privacy policy</a>
+        <a href="https://github.com/VivianHodgkinson/Letterwing">Source code</a>
+        <a href="https://github.com/VivianHodgkinson/Letterwing/issues">Report a problem</a>
+      </footer>
+    </div>
+  </body>
+</html>

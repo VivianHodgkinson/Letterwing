@@ -11,6 +11,7 @@ import { Reader } from './components/Reader'
 import { SettingsDialog } from './components/SettingsDialog'
 import { Sidebar } from './components/Sidebar'
 import { useKeymap } from './keymap'
+import { UpdatePill } from './components/Updates'
 import { buildReply, newMessage, type ReplyKind } from './replies'
 
 export interface View {
@@ -126,6 +127,11 @@ export function App() {
       const s = p as SyncStatus
       setStatus((prev) => ({ ...prev, [s.accountId]: s }))
     })
+    // Tray menu "New message"
+    const offCompose = on('compose:new', () => {
+      setMode('mail')
+      setTimeout(() => document.querySelector<HTMLButtonElement>('.new-mail')?.click(), 0)
+    })
     // Clicking a reminder
     const offEvent = on('open:event', (p) => {
       setMode('calendar')
@@ -145,6 +151,7 @@ export function App() {
       offStatus()
       offOpen()
       offEvent()
+      offCompose()
       if (t) clearTimeout(t)
     }
   }, [loadMessages, loadAccounts])
@@ -413,6 +420,7 @@ export function App() {
           </>
         )}
         {mode === 'calendar' && <span className="grow" />}
+        <UpdatePill />
         <button className="ghost" title="Send / receive" onClick={() => void api.syncNow().catch(fail)}>
           {syncing ? 'Syncing…' : 'Sync'}
         </button>

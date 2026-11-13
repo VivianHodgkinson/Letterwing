@@ -1,5 +1,5 @@
+// @tz Europe/London
 import assert from 'node:assert/strict'
-process.env.TZ = 'Europe/London' // has a DST change, unlike Johannesburg
 const { layout } = await import('../src/renderer/src/components/calendar/layout')
 const { addDays, startOfWeek, step, viewDays, whenLabel, fromInput, toInput } = await import('../src/renderer/src/components/calendar/dates')
 
