@@ -89,7 +89,7 @@ export function getSecret(accountId: string): string | null {
 
 export function setSecret(accountId: string, value: string | null): void {
   if (value !== null && !safeStorage.isEncryptionAvailable()) {
-    throw new Error('No OS keyring is available (KWallet or GNOME Keyring), so Letterwing cannot store passwords safely.')
+    throw new Error(`No system keyring answered (Letterwing tried "${safeStorage.getSelectedStorageBackend?.() ?? 'unknown'}"). Start KWallet or GNOME Keyring and try again; Letterwing won't store passwords unencrypted.`)
   }
   const raw = readJson<SecretMap>('secrets.json', {})
   if (value === null) delete raw[accountId]

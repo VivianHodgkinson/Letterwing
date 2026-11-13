@@ -19,6 +19,15 @@ import { captureMode, runCapture, useProfileOverride } from './devcapture'
 
 useProfileOverride()
 
+/**
+ * Where Letterwing keeps passwords and sign-in tokens. Electron picks a keyring from the desktop name
+ * (KDE -> KWallet, GNOME -> GNOME Keyring) and finds none under Hyprland, Sway and other compositors.
+ * Always use the freedesktop Secret Service instead: KWallet and GNOME Keyring both provide it, so the
+ * same saved tokens work whichever desktop session you log into. LETTERWING_PASSWORD_STORE overrides.
+ */
+if (process.platform === 'linux' && !app.commandLine.hasSwitch('password-store'))
+  app.commandLine.appendSwitch('password-store', process.env.LETTERWING_PASSWORD_STORE || 'gnome-libsecret')
+
 let win: BrowserWindow | null = null
 const devIcon = join(__dirname, '../../resources/icon.png')
 
