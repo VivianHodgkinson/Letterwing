@@ -9,7 +9,7 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist:linux": "electron-vite build && electron-builder --linux --publish never",
-    "test": "esbuild test/db.test.ts --bundle --platform=node --external:electron --alias:@shared=./src/shared --outfile=out/test/db.test.js --log-level=warning && ELECTRON_RUN_AS_NODE=1 electron out/test/db.test.js"
+    "test": "esbuild test/*.test.ts --bundle --platform=node --external:electron --alias:@shared=./src/shared --outdir=out/test --log-level=warning && ELECTRON_RUN_AS_NODE=1 electron out/test/db.test.js && ELECTRON_RUN_AS_NODE=1 electron out/test/keys.test.js"
   },
   "author": "Vivian Hodgkinson",
   "license": "MIT",

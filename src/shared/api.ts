@@ -30,5 +30,5 @@ export type ApiMethod = keyof Api
 export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: string }
 
 /** Push events from main to renderer */
-export type EventChannel = 'sync:status' | 'mail:changed'
+export type EventChannel = 'sync:status' | 'mail:changed' | 'key:forward'
 export type SyncEvent = SyncStatus

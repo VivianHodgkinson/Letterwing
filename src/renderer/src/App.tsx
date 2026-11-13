@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { effectiveKeymap } from '@shared/keys'
 import type { Account, Folder, MessageSummary, Settings, SyncStatus } from '@shared/types'
 import { api, on } from './api'
 import { AccountDialog } from './components/AccountDialog'
@@ -6,6 +7,7 @@ import { MessageList } from './components/MessageList'
 import { Reader } from './components/Reader'
 import { SettingsDialog } from './components/SettingsDialog'
 import { Sidebar } from './components/Sidebar'
+import { useKeymap } from './keymap'
 
 export interface View {
   accountId: string | null
@@ -26,6 +28,7 @@ export function App() {
   const [status, setStatus] = useState<Record<string, SyncStatus>>({})
   const [dialog, setDialog] = useState<'account' | 'settings' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [imagesRequest, setImagesRequest] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const loadAccounts = useCallback(async () => {
@@ -93,35 +96,45 @@ export function App() {
     []
   )
 
-  // Keyboard: j/k or arrows to move, / to search, u unread, s star (flag), Escape clears search
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || dialog) {
-        if (e.key === 'Escape' && target === searchRef.current) {
-          setQuery('')
-          searchRef.current?.blur()
-        }
-        return
-      }
-      const i = messages.findIndex((m) => m.key === selected)
-      if (e.key === 'j' || e.key === 'ArrowDown') {
-        const next = messages[Math.min(messages.length - 1, i + 1)]
-        if (next) select(next)
-      } else if (e.key === 'k' || e.key === 'ArrowUp') {
-        const prev = messages[Math.max(0, i - 1)]
-        if (prev) select(prev)
-      } else if (e.key === '/') {
-        e.preventDefault()
+  const keymap = useMemo(() => (settings ? effectiveKeymap(settings.keymapPreset, settings.keybindings) : null), [settings])
+  const move = (to: (i: number) => number) => {
+    const i = messages.findIndex((m) => m.key === selected)
+    const m = messages[Math.max(0, Math.min(messages.length - 1, to(i)))]
+    if (m) select(m)
+  }
+  const fail = (e: Error) => setError(e.message)
+  // Every shortcut is an action; which keys trigger it comes from Settings → Keyboard
+  useKeymap(
+    keymap ?? effectiveKeymap('classic', {}),
+    {
+      nextMessage: () => move((i) => i + 1),
+      prevMessage: () => move((i) => (i < 0 ? 0 : i - 1)),
+      firstMessage: () => move(() => 0),
+      lastMessage: () => move(() => messages.length - 1),
+      goInbox: () => {
+        setView(UNIFIED)
+        setQuery('')
+        setSelected(null)
+      },
+      markRead: () => current && void api.setRead([current.key], true).catch(fail),
+      markUnread: () => current && void api.setRead([current.key], false).catch(fail),
+      toggleRead: () => current && void api.setRead([current.key], current.unread).catch(fail),
+      toggleFlag: () => current && void api.setFlagged([current.key], !current.flagged).catch(fail),
+      loadImages: () => setImagesRequest((n) => n + 1),
+      search: () => {
         searchRef.current?.focus()
-      } else if (e.key === 'u' && current) void api.setRead([current.key], current.unread)
-      else if (e.key === 's' && current) void api.setFlagged([current.key], !current.flagged)
-      else return
-      e.preventDefault()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [messages, selected, current, select, dialog])
+        searchRef.current?.select()
+      },
+      clearSearch: () => {
+        setQuery('')
+        searchRef.current?.blur()
+      },
+      syncAll: () => void api.syncNow().catch(fail),
+      openSettings: () => setDialog('settings'),
+      addAccount: () => setDialog('account')
+    },
+    !!keymap && dialog === null
+  )
 
   if (!settings) return null
   const accountById = Object.fromEntries(accounts.map((a) => [a.id, a]))
@@ -135,7 +148,7 @@ export function App() {
         <input
           ref={searchRef}
           className="search"
-          placeholder="Search all mail  ( / )"
+          placeholder="Search all mail"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -184,7 +197,7 @@ export function App() {
               onSelect={select}
               onFlag={(m) => void api.setFlagged([m.key], !m.flagged)}
             />
-            {settings.readingPane !== 'off' && <Reader message={current} account={current ? accountById[current.accountId] : undefined} settings={settings} />}
+            {settings.readingPane !== 'off' && <Reader message={current} account={current ? accountById[current.accountId] : undefined} settings={settings} imagesRequest={imagesRequest} />}
           </div>
         )}
       </div>

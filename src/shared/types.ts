@@ -1,3 +1,5 @@
+import type { Keymap, PresetId } from './keys'
+
 /** How an account connects. Each kind maps to one connector in src/main/connectors. */
 export type AccountKind = 'imap' | 'microsoft' | 'google'
 
@@ -99,6 +101,10 @@ export interface Settings {
   themeVars: Record<string, string>
   /** Load remote images without asking (privacy: off by default) */
   loadRemoteImages: boolean
+  /** Base keyboard scheme; Classic unless the user picks another */
+  keymapPreset: PresetId
+  /** Per-action overrides on top of the preset. [] unbinds an action. */
+  keybindings: Partial<Keymap>
   /** Minutes between background syncs */
   syncInterval: number
   /** Default OAuth client IDs; per-account overrides live on the account */

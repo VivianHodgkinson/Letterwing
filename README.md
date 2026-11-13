@@ -35,7 +35,10 @@ JSON box for any variable in `styles.css`. Reading pane right/bottom/off, three 
 Privacy: mail HTML is sanitised (DOMPurify) and shown in a sandboxed iframe with no scripts and its own CSP.
 Remote images (tracking pixels) are blocked until you click *Load images*.
 
-Keys: `j`/`k` or arrows to move, `/` search, `u` toggle read, `s` flag, `F12` devtools.
+**Keyboard:** the classic shortcuts by default (`Ctrl+Q` read, `Ctrl+U` unread, `Insert` flag, `Ctrl+E`/`F3` search,
+`F9` send/receive, `Ctrl+.`/`Ctrl+,` next/previous...). Settings → Keyboard switches to the Single-key scheme or rebinds any
+action, including multi-key sequences like `G I`, with conflict warnings. Shortcuts live in `src/shared/keys.ts`: a new
+action is one entry in `ACTIONS` plus a handler in `App.tsx`. `F12` opens devtools.
 
 ## Roadmap
 

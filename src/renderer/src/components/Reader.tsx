@@ -8,9 +8,11 @@ interface Props {
   message: MessageSummary | null
   account?: Account
   settings: Settings
+  /** Bumped by the "Load remote images" shortcut */
+  imagesRequest: number
 }
 
-export function Reader({ message, account, settings }: Props) {
+export function Reader({ message, account, settings, imagesRequest }: Props) {
   const [body, setBody] = useState<MessageBody | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [allowImages, setAllowImages] = useState(false)
@@ -29,6 +31,10 @@ export function Reader({ message, account, settings }: Props) {
       live = false
     }
   }, [message?.key])
+
+  useEffect(() => {
+    if (imagesRequest > 0) setAllowImages(true)
+  }, [imagesRequest])
 
   const remote = settings.loadRemoteImages || allowImages
   const doc = useMemo(() => (body ? renderDoc(body, remote) : ''), [body, remote])

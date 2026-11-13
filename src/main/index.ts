@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -39,7 +39,11 @@ function createWindow(): void {
     }
   })
   win.webContents.on('before-input-event', (_e, input) => {
-    if (input.type === 'keyDown' && input.key === 'F12') win?.webContents.toggleDevTools()
+    if (input.type !== 'keyDown') return
+    if (input.key === 'F12') win?.webContents.toggleDevTools()
+    // Keys typed while focus is inside the sandboxed mail frame never reach the app's own document.
+    // Forward them; the renderer only acts on these when the mail frame actually has focus.
+    else send('key:forward', { key: input.key, code: input.code, ctrlKey: input.control, altKey: input.alt, shiftKey: input.shift, metaKey: input.meta })
   })
   win.on('closed', () => (win = null))
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -166,6 +170,10 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(() => {
+  // Electron's default menu owns Ctrl+R (reload), Ctrl+Q (quit on Linux), Ctrl+W and others, which would
+  // swallow Classic shortcuts such as Ctrl+Q "mark as read". All shortcuts go through the user's keymap instead.
+  // (macOS needs a menu for copy/paste, so it keeps one there.)
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   db.openDb()
   sync.init(send)
   createWindow()

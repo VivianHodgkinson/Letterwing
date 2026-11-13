@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS: Settings = {
   density: 'comfortable',
   themeVars: {},
   loadRemoteImages: false,
+  keymapPreset: 'classic',
+  keybindings: {},
   syncInterval: 5,
   microsoftClientId: '',
   googleClientId: '',
