@@ -256,6 +256,8 @@ export interface Settings {
   layout: 'auto' | 'wide' | 'medium' | 'narrow'
   /** Mail from these goes to Junk: addresses, or whole domains written as "@example.com" */
   blockedSenders: string[]
+  /** Email bodies in the theme's colours (dark mode turns designed emails dark too), or exactly as sent */
+  mailColors: 'theme' | 'original'
   /** Light or dark, or follow the operating system */
   theme: 'system' | 'light' | 'dark'
   /** CSS variable overrides, e.g. { "--accent": "#ff8800" }. The whole look is driven by these. */

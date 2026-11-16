@@ -146,6 +146,13 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
               Show messages as conversations
             </label>
             <label>
+              Email colours
+              <select value={settings.mailColors} onChange={(e) => void onChange({ mailColors: e.target.value as Settings['mailColors'] })}>
+                <option value="theme">Match my theme (dark mode makes emails dark too)</option>
+                <option value="original">As the sender designed them</option>
+              </select>
+            </label>
+            <label>
               Mark messages as read
               <select value={settings.markRead} onChange={(e) => void onChange({ markRead: e.target.value as Settings['markRead'] })}>
                 <option value="leave">When I move off them</option>

@@ -153,7 +153,8 @@ small { color: var(--text-faint); }
 .chip-x { background: none; border: 0; color: var(--text-faint); padding: 0 6px; }
 .chip-x:hover { color: var(--accent); }
 .chip.invalid { border-color: var(--danger); color: var(--danger); }
-.mail-frame { display: block; border: 0; background: #fff; width: 100%; }
+.mail-frame { display: block; border: 0; background: transparent; width: 100%; color-scheme: normal; }
+.card-actions .push-right { margin-left: auto; }
 .reader-loading, .reader-error { padding: 24px; color: var(--text-faint); }
 .reader-error { color: var(--danger); }
 

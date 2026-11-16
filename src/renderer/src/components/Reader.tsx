@@ -1,4 +1,4 @@
-import { cleanBody, imagesAllowed } from '../mailHtml'
+import { cleanBody, imagesAllowed, lookCss, type MailLook } from '../mailHtml'
 import { printMessages } from '../print'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Account, CalendarEvent, Invite, MessageBody, MessageSummary, Settings } from '@shared/types'
@@ -38,6 +38,7 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
   const [thread, setThread] = useState<MessageSummary[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [allowImages, setAllowImages] = useState(false)
+  const look = useMailLook(settings.mailColors !== 'original')
 
   useEffect(() => {
     setAllowImages(false)
@@ -147,6 +148,7 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
             }
             remoteImages={settings.loadRemoteImages || allowImages}
             onAllowImages={() => setAllowImages(true)}
+            look={look}
             onReply={actions.reply}
             onRespond={actions.respondInvite}
           />
@@ -163,12 +165,16 @@ function MessageCard(props: {
   onToggle(): void
   remoteImages: boolean
   onAllowImages(): void
+  /** The theme's colours for the email body, or null to show it as sent */
+  look: MailLook | null
   onReply(kind: ReplyKind, message: MessageSummary, body: MessageBody): void
   onRespond(message: MessageSummary, answer: 'accepted' | 'tentative' | 'declined'): void
 }) {
   const { message: m, account, expanded, onToggle, remoteImages } = props
   const [body, setBody] = useState<MessageBody | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** This one message as the sender designed it, for the rare email that looks wrong in dark colours */
+  const [original, setOriginal] = useState(false)
 
   useEffect(() => {
     if (!expanded || body) return
@@ -228,6 +234,11 @@ function MessageCard(props: {
           <button className="ghost small" onClick={() => props.onReply('forward', m, body)}>
             ↪ Forward
           </button>
+          {props.look?.dark && (
+            <button className="ghost small push-right" onClick={() => setOriginal((o) => !o)} title="Show this email in the colours it was sent with, or in your theme's">
+              {original ? 'Theme colours' : 'Original colours'}
+            </button>
+          )}
         </div>
       )}
       {body?.security && (body.security.level === 'danger' || body.security.level === 'warn') && (
@@ -277,7 +288,7 @@ function MessageCard(props: {
       ) : !body ? (
         <div className="reader-loading">Loading…</div>
       ) : (
-        <MailFrame body={body} remoteImages={remoteImages} />
+        <MailFrame body={body} remoteImages={remoteImages} look={original ? null : props.look} />
       )}
     </div>
   )
@@ -347,9 +358,9 @@ function InviteCard({ invite: i, onRespond }: { invite: Invite; onRespond(a: 'ac
  * The email itself, in a sandboxed iframe sized to its content. No allow-scripts, so the mail can
  * never run code; allow-same-origin only lets us measure its height. Links open in the browser.
  */
-function MailFrame({ body, remoteImages }: { body: MessageBody; remoteImages: boolean }) {
+function MailFrame({ body, remoteImages, look }: { body: MessageBody; remoteImages: boolean; look: MailLook | null }) {
   const frame = useRef<HTMLIFrameElement>(null)
-  const doc = useMemo(() => renderDoc(body, remoteImages), [body, remoteImages])
+  const doc = useMemo(() => renderDoc(body, remoteImages, look), [body, remoteImages, look])
   const [height, setHeight] = useState(120)
 
   useEffect(() => {
@@ -387,7 +398,44 @@ function MailFrame({ body, remoteImages }: { body: MessageBody; remoteImages: bo
   )
 }
 
-function renderDoc(body: MessageBody, remoteImages: boolean): string {
+/**
+ * The theme's colours for email bodies, read from the app's CSS variables (so custom theme colours count
+ * too) and read again when the theme or its colours change. Null when emails should look as sent.
+ */
+function useMailLook(enabled: boolean): MailLook | null {
+  const read = (): MailLook => {
+    const css = getComputedStyle(document.documentElement)
+    const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback
+    return {
+      dark: matchMedia('(prefers-color-scheme: dark)').matches,
+      bg: v('--bg-0', '#ffffff'),
+      text: v('--text', '#1a1d24'),
+      link: v('--accent', '#2563eb'),
+      muted: v('--text-dim', '#555555'),
+      border: v('--border', '#c8cdd6')
+    }
+  }
+  const [look, setLook] = useState<MailLook>(read)
+  useEffect(() => {
+    const update = () =>
+      setLook((prev) => {
+        const next = read()
+        return JSON.stringify(next) === JSON.stringify(prev) ? prev : next
+      })
+    const mq = matchMedia('(prefers-color-scheme: dark)')
+    mq.addEventListener('change', update)
+    // Custom theme colours are set as inline styles on <html>
+    const mo = new MutationObserver(update)
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'data-theme'] })
+    return () => {
+      mq.removeEventListener('change', update)
+      mo.disconnect()
+    }
+  }, [])
+  return enabled ? look : null
+}
+
+function renderDoc(body: MessageBody, remoteImages: boolean, look: MailLook | null): string {
   const content = cleanBody(body)
   const csp = `default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: cid:${remoteImages ? ' https: http:' : ''}; font-src data:`
   return `<!doctype html><html><head><meta charset="utf-8">
@@ -399,7 +447,7 @@ function renderDoc(body: MessageBody, remoteImages: boolean): string {
   img { max-width: 100%; height: auto; }
   pre.plain { white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; margin: 0; }
   blockquote { border-left: 3px solid #c8cdd6; margin: 0 0 0 4px; padding-left: 12px; color: #555; }
-  a { color: #2563eb; }${remoteImages ? '' : "\n  img[src^='http:'], img[src^='https:'] { visibility: hidden; }"}
+  a { color: #2563eb; }${remoteImages ? '' : "\n  img[src^='http:'], img[src^='https:'] { visibility: hidden; }"}${lookCss(look, body.html)}
 </style></head><body>${content}</body></html>`
 }
 

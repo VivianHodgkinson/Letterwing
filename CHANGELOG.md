@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+**Emails follow your theme**
+- In dark mode, emails are no longer bright white: plain emails use your theme's colours, and designed emails (newsletters, receipts) are turned dark with their pictures kept in their real colours.
+- *Original colours* on any message shows it exactly as sent; Settings → General → *Email colours* can make that the default.
+
 ## 0.1.10
 
 **Phishing warnings**

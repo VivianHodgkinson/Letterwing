@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   layout: 'auto',
   blockedSenders: [],
+  mailColors: 'theme',
   density: 'comfortable',
   themeVars: {},
   themeVarsLight: {},
