@@ -1,5 +1,6 @@
 import type { Account, Address, FolderRole, Invite } from '@shared/types'
 import { poll } from '../pace'
+import { unfold } from '../security'
 import type { AttachmentData, CompiledMessage, FolderSync, MailConnector, RemoteSummary } from './types'
 
 const GRAPH = 'https://graph.microsoft.com/v1.0'
@@ -241,7 +242,8 @@ export class GraphConnector implements MailConnector {
       hasRemoteContent: !!html && /\b(src|background)\s*=\s*["']?https?:/i.test(html),
       messageId: m.internetMessageId ?? '',
       references: refs,
-      replyTo: (m.replyTo ?? []).map(toAddr)
+      replyTo: (m.replyTo ?? []).map(toAddr),
+      authResults: (m.internetMessageHeaders ?? []).filter((h) => h.name.toLowerCase() === 'authentication-results').map((h) => unfold(h.value))
     }
   }
 
@@ -348,6 +350,49 @@ export class GraphConnector implements MailConnector {
 
   async remove(_folderId: string, remoteIds: string[]): Promise<void> {
     await this.batch(remoteIds.map((id) => ({ method: 'DELETE', url: `/me/messages/${id}` })))
+  }
+
+  /** Where reportMessage works for this mailbox: '' (v1.0) or the beta endpoint; undefined until it has worked once */
+  private reportBase: string | null | undefined
+
+  /**
+   * Microsoft's own "Report junk / phishing / not junk": trains their filter for this mailbox and moves
+   * the message. Tried on v1.0, then beta; if neither has it, returns false and the caller just moves.
+   */
+  async report(_folderId: string, remoteIds: string[], action: 'junk' | 'notJunk' | 'phish'): Promise<boolean> {
+    // "Not junk" has a documented action of its own: back to the Inbox, and the sender off the blocked list
+    if (action === 'notJunk') {
+      await Promise.all(remoteIds.map((id) => this.call(`/me/messages/${id}/markAsNotJunk`, { method: 'POST', body: JSON.stringify({ moveToInbox: true }) })))
+      return true
+    }
+    const body = JSON.stringify({ isMessageMoveRequested: true, reportAction: action })
+    const send = (base: string, id: string) => this.call(`${base}/me/messages/${id}/reportMessage`, { method: 'POST', body })
+    const missing = (e: unknown) => e instanceof GraphError && [400, 404, 405, 501].includes(e.status)
+    let ids = remoteIds
+    if (this.reportBase === undefined) {
+      // Probe with the first message: whichever endpoint takes it is the one to use
+      for (const base of ['', 'https://graph.microsoft.com/beta']) {
+        try {
+          await send(base, ids[0])
+          this.reportBase = base
+          break
+        } catch (e) {
+          if (!missing(e)) throw e
+        }
+      }
+      // Not available (or that message was refused): just move this time, try again next time
+      if (this.reportBase === undefined || this.reportBase === null) return false
+      ids = ids.slice(1)
+    }
+    const base = this.reportBase
+    if (base === null) return false
+    await Promise.all(ids.map((id) => send(base, id)))
+    return true
+  }
+
+  /** Block this message's sender in Microsoft 365 itself (its blocked senders list, which works everywhere) and move it to Junk */
+  async blockSender(_folderId: string, remoteId: string): Promise<void> {
+    await this.call(`/me/messages/${remoteId}/markAsJunk`, { method: 'POST', body: JSON.stringify({ moveToJunk: true }) })
   }
 
   /** IDs of every message in a folder matching a filter, following all pages */

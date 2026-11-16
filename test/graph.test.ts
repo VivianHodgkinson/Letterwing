@@ -41,4 +41,35 @@ assert.deepEqual(r.deletes.sort(), ['del1', 'gone1'])
 assert.ok(r.upserts.every((u) => u.subject !== '(no subject)' && u.from), 'nothing blank')
 assert.equal(calls.filter((x) => x.includes('$batch')).length, 1, 'one batch for the partial entries')
 assert.equal(JSON.parse(r.state).delta, 'https://graph.test/delta?deltatoken=2')
+// Report junk: v1.0 lacks reportMessage here, beta has it -> reported through beta, no plain move needed
+{
+  const seen: string[] = []
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    seen.push(`${init?.method} ${url}`)
+    if (url.includes('/v1.0/me/messages/') && url.endsWith('/reportMessage'))
+      return new Response(JSON.stringify({ error: { code: 'BadRequest', message: "Resource not found for the segment 'reportMessage'." } }), { status: 400 })
+    if (url.includes('/beta/me/messages/') && url.endsWith('/reportMessage')) return new Response(null, { status: 202 })
+    return new Response('{}', { status: 200 })
+  }) as typeof fetch
+  const r = new GraphConnector(account, async () => 'token')
+  assert.equal(await r.report('inbox', ['m1', 'm2'], 'junk'), true)
+  assert.deepEqual(seen, [
+    'POST https://graph.microsoft.com/v1.0/me/messages/m1/reportMessage',
+    'POST https://graph.microsoft.com/beta/me/messages/m1/reportMessage',
+    'POST https://graph.microsoft.com/beta/me/messages/m2/reportMessage'
+  ], 'probes once, then uses what worked')
+
+  // Not junk: Microsoft's documented action (back to the Inbox, sender unblocked)
+  const nj: string[] = []
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    nj.push(`${init?.method} ${url} ${init?.body}`)
+    return new Response(null, { status: 202 })
+  }) as typeof fetch
+  assert.equal(await new GraphConnector(account, async () => 'token').report('junk', ['m9'], 'notJunk'), true)
+  assert.deepEqual(nj, ['POST https://graph.microsoft.com/v1.0/me/messages/m9/markAsNotJunk {"moveToInbox":true}'])
+
+  // Nowhere to report: says so, so the caller just moves the messages
+  globalThis.fetch = (async () => new Response(JSON.stringify({ error: { message: 'nope' } }), { status: 404 })) as unknown as typeof fetch
+  assert.equal(await new GraphConnector(account, async () => 'token').report('inbox', ['m1'], 'phish'), false)
+}
 console.log('graph tests passed')

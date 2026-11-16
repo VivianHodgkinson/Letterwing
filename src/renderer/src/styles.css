@@ -496,3 +496,8 @@ body.dragging-resize, body.dragging-resize * { cursor: ns-resize !important; use
 .outbox-subject { font-weight: 600; }
 .outbox-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .folder.outbox-link .count { color: var(--warn); }
+/* Phishing warnings */
+.security-banner { margin: 0 14px 8px; padding: 8px 12px; border-radius: var(--radius); font-size: 12.5px; line-height: 1.45; }
+.security-banner.danger { background: color-mix(in srgb, var(--danger) 18%, var(--bg-1)); border: 1px solid var(--danger); }
+.security-banner.warn { background: color-mix(in srgb, var(--warn) 16%, var(--bg-1)); border: 1px solid color-mix(in srgb, var(--warn) 70%, transparent); }
+.blocked-list { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -69,8 +69,15 @@ export interface Api {
   /** Move to Trash; messages already in Trash are deleted for good */
   deleteMessages(keys: string[]): Promise<void>
   archiveMessages(keys: string[]): Promise<void>
-  /** Move to the account's Junk folder */
+  /** To Junk; on Microsoft 365 reported to its spam filter too */
   junkMessages(keys: string[]): Promise<void>
+  /** Out of Junk back to the Inbox; reported as "not junk" where the provider takes that */
+  notJunkMessages(keys: string[]): Promise<void>
+  /** Report as phishing (Microsoft 365) and move to Junk */
+  reportPhishing(keys: string[]): Promise<void>
+  /** Block an address, or "@domain" for everyone there: their mail goes to Junk. Returns how many cached messages moved. */
+  blockSender(entry: string, fromMessageKey?: string): Promise<number>
+  unblockSender(entry: string): Promise<void>
   /** Mark every message in a folder read on the server, not only the cached ones. folderId '*inbox' means every account's inbox. */
   markFolderRead(accountId: string | null, folderId: string): Promise<void>
   /** Permanently delete everything in a folder (for Trash and Junk) */

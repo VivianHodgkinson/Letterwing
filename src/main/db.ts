@@ -363,6 +363,14 @@ export function clearFolder(accountId: string, folderId: string): void {
   })
 }
 
+/** Cached inbox messages whose sender matches, across all accounts (for blocking a sender) */
+export function inboxKeysFrom(match: (address: string) => boolean): string[] {
+  const rows = db
+    .prepare(`SELECT m.key AS key, m.from_json AS from_json FROM messages m JOIN folders f ON f.account_id = m.account_id AND f.id = m.folder_id WHERE f.role = 'inbox'`)
+    .all() as Row[]
+  return rows.filter((r) => r.from_json && match((JSON.parse(r.from_json as string) as Address).address ?? '')).map((r) => r.key as string)
+}
+
 /** Take messages out of the cache straight away (moved or deleted). Returns them so a failed server call can put them back. */
 export function removeLocal(keys: string[]): { message: MessageSummary; body: MessageBody | null }[] {
   return tx(() => {

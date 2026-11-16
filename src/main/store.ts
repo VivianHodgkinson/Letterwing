@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   readingPane: 'right',
   theme: 'system',
   layout: 'auto',
+  blockedSenders: [],
   density: 'comfortable',
   themeVars: {},
   themeVarsLight: {},

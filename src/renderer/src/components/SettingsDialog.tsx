@@ -3,6 +3,7 @@ import type { Account, Settings } from '@shared/types'
 import { KeybindingsEditor } from './KeybindingsEditor'
 import { UpdateSettings } from './Updates'
 import { api } from '../api'
+import { blockEntry } from '@shared/blocking'
 
 interface Props {
   settings: Settings
@@ -161,6 +162,8 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
               <input type="checkbox" checked={settings.closeToTray} onChange={(e) => void onChange({ closeToTray: e.target.checked })} />
               Keep running in the tray when the window is closed (new mail and reminders keep coming)
             </label>
+            <h3>Blocked senders</h3>
+            <BlockedSenders list={settings.blockedSenders} onChange={onChange} />
             <h3>Mail links</h3>
             <DefaultMailApp />
             <h3>Updates</h3>
@@ -435,5 +438,61 @@ function DefaultMailApp() {
       {!status.canSet && <span className="hint">Available in the installed app.</span>}
       {note && <span className="hint">{note}</span>}
     </div>
+  )
+}
+
+/** Addresses and domains whose mail goes straight to Junk */
+function BlockedSenders({ list, onChange }: { list: string[]; onChange(patch: Partial<Settings>): Promise<void> }) {
+  const [input, setInput] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const add = async () => {
+    const entry = blockEntry(input)
+    if (!entry) return setError('Type an email address (jo@example.com) or a domain (example.com).')
+    setError(null)
+    try {
+      await api.blockSender(entry)
+      setInput('')
+      await onChange({})
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+  return (
+    <>
+      <p className="hint">
+        Mail from these goes to Junk as it arrives, while Letterwing is running. Blocking an address from a Microsoft 365 message (right-click → Block) also
+        adds it to Microsoft's own blocked list, which works on every device; unblock it there in your Microsoft 365 web mail's junk email settings, or with
+        Not junk on one of its messages.
+      </p>
+      {list.length > 0 && (
+        <div className="blocked-list">
+          {list.map((b) => (
+            <span key={b} className="chip">
+              {b}
+              <button className="chip-x" title={`Unblock ${b}`} onClick={() => void api.unblockSender(b).then(() => onChange({}))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="row">
+        <input
+          placeholder="Block an address or domain"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void add()
+            }
+          }}
+        />
+        <button className="ghost" onClick={() => void add()} disabled={!input.trim()}>
+          Block
+        </button>
+      </div>
+      {error && <div className="error">{error}</div>}
+    </>
   )
 }

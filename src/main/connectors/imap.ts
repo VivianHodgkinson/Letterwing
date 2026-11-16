@@ -3,6 +3,7 @@ import { simpleParser, type AddressObject, type ParsedMail } from 'mailparser'
 import nodemailer from 'nodemailer'
 import type { Account, Address, FolderRole, Invite } from '@shared/types'
 import { parseInvite } from '../ical'
+import { unfold } from '../security'
 import type { AttachmentData, CompiledMessage, FolderSync, MailConnector, RemoteSummary } from './types'
 
 type Auth = { pass: string } | { accessToken: string }
@@ -204,7 +205,8 @@ export class ImapConnector implements MailConnector {
       hasRemoteContent: !!html && /\b(src|background)\s*=\s*["']?https?:/i.test(html),
       messageId: p.messageId ?? '',
       references: typeof p.references === 'string' ? [p.references] : (p.references ?? []),
-      replyTo: flatten(p.replyTo)
+      replyTo: flatten(p.replyTo),
+      authResults: p.headerLines.filter((h) => h.key === 'authentication-results').map((h) => unfold(h.line.slice(h.line.indexOf(':') + 1)))
     }
   }
 

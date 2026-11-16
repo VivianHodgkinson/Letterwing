@@ -23,6 +23,13 @@ export interface MailConnector {
   move(folderId: string, remoteIds: string[], toFolderId: string): Promise<void>
   /** Permanently delete. "Delete" in the UI is a move to Trash; this is for messages already there. */
   remove(folderId: string, remoteIds: string[]): Promise<void>
+  /**
+   * Report messages to the provider's spam filter ('junk', 'notJunk' or 'phish'), which also moves them.
+   * Optional: returns false (or is absent) where the provider has no such thing; then they're just moved.
+   */
+  report?(folderId: string, remoteIds: string[], action: 'junk' | 'notJunk' | 'phish'): Promise<boolean>
+  /** Block the sender of this message in the provider's own blocked list (and move it to Junk). Optional. */
+  blockSender?(folderId: string, remoteId: string): Promise<void>
   /** Mark every message in the folder read, including ones never downloaded */
   markFolderRead(folderId: string): Promise<void>
   /** Permanently delete every message in the folder */

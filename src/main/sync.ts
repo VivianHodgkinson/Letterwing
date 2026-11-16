@@ -2,7 +2,8 @@ import type { Account, MessageSummary, SyncStatus } from '@shared/types'
 import { connectorFor } from './connectors'
 import type { MailConnector } from './connectors/types'
 import * as db from './db'
-import { getAccounts } from './store'
+import { isBlocked } from '@shared/blocking'
+import { getAccounts, getSettings } from './store'
 
 /** Messages pulled per folder on a first sync, and per "load older" step */
 export const BATCH = 200
@@ -67,6 +68,24 @@ function ensureWatcher(account: Account): void {
 }
 
 /**
+ * Move inbox mail from blocked senders to Junk. Gmail and IMAP have no server rules we can set, so
+ * Letterwing does it as mail arrives (while it's running). Returns the remote IDs it moved.
+ */
+async function moveBlocked(account: Account, c: MailConnector, inboxId: string, upserts: { remoteId: string; from: { address: string } | null }[]): Promise<Set<string>> {
+  const list = getSettings().blockedSenders
+  const hits = upserts.filter((u) => isBlocked(u.from?.address, list)).map((u) => u.remoteId)
+  const junk = db.folderByRole(account.id, 'junk')
+  if (!hits.length || !junk) return new Set()
+  try {
+    await c.move(inboxId, hits, junk.id)
+    db.removeLocal(hits.map((id) => db.messageKey(account.id, inboxId, id)))
+    return new Set(hits)
+  } catch {
+    return new Set() // stays in the inbox; tried again when it next comes through
+  }
+}
+
+/**
  * Sync one account (or one folder of it). Concurrent calls for the same target share the running sync.
  * `quiet` is for the frequent new-mail checks: no "syncing" status (so the UI doesn't flicker every few
  * seconds), only errors and the recovery from one.
@@ -88,8 +107,11 @@ export function syncAccount(account: Account, onlyFolder?: string, quiet = false
         const before = db.getFolderState(account.id, f.id)
         const result = await c.syncFolder(f.id, before, BATCH)
         db.applySync(account.id, f.id, result)
+        // Blocked senders: straight to Junk, before anyone is told about it
+        let blocked = new Set<string>()
+        if (f.role === 'inbox') blocked = await moveBlocked(account, c, f.id, result.upserts)
         if (f.role === 'inbox' && before !== null && !result.reset) {
-          const fresh = result.upserts.filter((u) => u.unread).map((u) => db.getMessage(db.messageKey(account.id, f.id, u.remoteId))).filter((m) => m !== null)
+          const fresh = result.upserts.filter((u) => u.unread && !blocked.has(u.remoteId)).map((u) => db.getMessage(db.messageKey(account.id, f.id, u.remoteId))).filter((m) => m !== null)
           if (fresh.length) onNewMail(account, fresh)
         }
         if (result.upserts.length || result.deletes.length || result.flagUpdates.length || result.existing) notify('mail:changed', { accountId: account.id, folderId: f.id })

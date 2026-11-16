@@ -110,6 +110,17 @@ export interface MessageBody {
   replyTo: Address[]
   /** Set when the message is a meeting invitation, update or cancellation */
   invite?: Invite
+  /** Authentication-Results headers as the server wrote them, topmost first */
+  authResults?: string[]
+  /** Whether the message is really from who it says (worked out from authResults and the sender) */
+  security?: SecurityCheck
+}
+
+export interface SecurityCheck {
+  /** danger: failed the sender check; warn: weaker signs; ok: passed; unknown: the server didn't say */
+  level: 'ok' | 'warn' | 'danger' | 'unknown'
+  /** Plain-language reasons for a warning */
+  reasons: string[]
 }
 
 export type ResponseStatus = 'accepted' | 'tentative' | 'declined' | 'needsAction' | 'organizer' | 'none'
@@ -243,6 +254,8 @@ export interface Settings {
   density: Density
   /** Screen layout: 'auto' fits the window width (tiling window managers, small screens); the others force one */
   layout: 'auto' | 'wide' | 'medium' | 'narrow'
+  /** Mail from these goes to Junk: addresses, or whole domains written as "@example.com" */
+  blockedSenders: string[]
   /** Light or dark, or follow the operating system */
   theme: 'system' | 'light' | 'dark'
   /** CSS variable overrides, e.g. { "--accent": "#ff8800" }. The whole look is driven by these. */

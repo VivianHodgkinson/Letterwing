@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.10
+
+**Phishing warnings**
+- A red banner on messages that fail your mail server's sender check (they may not really be from who they say), and an amber one for weaker signs, such as a sender name pretending to be another address.
+
+**Block senders**
+- Right-click a message → *Block* the sender, or everyone at their domain: their mail goes straight to Junk. Manage the list in Settings → General.
+- On Microsoft 365, blocking an address also adds it to Microsoft's own blocked list, so it works on every device.
+
+**Junk and phishing reports**
+- *Report phishing* in the message menu.
+- On Microsoft 365, *Not junk* uses Microsoft's own action (back to the Inbox, sender unblocked), and *Move to Junk* / *Report phishing* report to Microsoft's filter where available.
+- Marking something *Not junk* also lifts a block on its sender.
+
 ## 0.1.9
 
 **Printing**

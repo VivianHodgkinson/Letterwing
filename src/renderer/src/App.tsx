@@ -29,6 +29,7 @@ import { colourMenu } from './menus'
 import { Sidebar, sortFolders } from './components/Sidebar'
 import { useKeymap } from './keymap'
 import { UpdatePill } from './components/Updates'
+import { isBlocked } from '@shared/blocking'
 import { printMessages } from './print'
 import { buildReply, messageFromLink, newMessage, type ReplyKind } from './replies'
 
@@ -38,6 +39,8 @@ export interface View {
 }
 
 const UNIFIED: View = { accountId: null, folderId: '*inbox' }
+/** Shared mail services: "block everyone at" these would block half the world */
+const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'icloud.com', 'me.com', 'aol.com', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.net', 'mail.com', 'zoho.com', 'yandex.com', 'webmail.co.za', 'vodamail.co.za', 'mweb.co.za', 'telkomsa.net'])
 const PAGE = 100
 
 type Notice = { text: string; error: boolean } | null
@@ -419,9 +422,14 @@ export function App() {
     const isUnread = (r: MessageSummary) => (r.threadUnread !== undefined ? r.threadUnread > 0 : r.unread)
     const allFlagged = rows.every((r) => r.flagged)
     const inJunk = rows.every((r) => roleOf(r) === 'junk')
+    // Blocking applies when every selected message is from the same sender
+    const senders = new Set(rows.map((r) => r.from?.address.toLowerCase() ?? ''))
+    const sender = senders.size === 1 && [...senders][0] ? [...senders][0] : null
+    const senderDomain = sender?.split('@')[1] ?? null
+    const blockList = settings?.blockedSenders ?? []
+    const senderBlocked = sender ? blockList.find((b) => isBlocked(sender, [b])) : undefined
     const inTrash = rows.some((r) => roleOf(r) === 'trash')
     const sameFolder = rows.every((r) => r.folderId === rows[0].folderId) ? rows[0].folderId : null
-    const inbox = accFolders.find((f) => f.role === 'inbox')
 
     const items: MenuItem[] = [
       ...(single && roleOf(single) === 'drafts'
@@ -452,8 +460,18 @@ export function App() {
         : { label: 'Move to (select messages from one account)', enabled: false },
       { id: 'archive', label: 'Archive', enabled: everyAccountHas('archive') && rows.every((r) => roleOf(r) !== 'archive'), shortcut: sc('archive') },
       inJunk
-        ? { id: 'notJunk', label: 'Not junk (move to Inbox)', enabled: !!(accountId && inbox) }
+        ? { id: 'notJunk', label: 'Not junk (move to Inbox)', enabled: rows.every((r) => folders[r.accountId]?.some((f) => f.role === 'inbox')) }
         : { id: 'junk', label: 'Move to Junk', enabled: everyAccountHas('junk') },
+      ...(!inJunk ? [{ id: 'phish', label: 'Report phishing', enabled: everyAccountHas('junk') }] : []),
+      ...(sender
+        ? senderBlocked
+          ? [{ id: 'unblock', label: `Unblock ${senderBlocked}` }]
+          : [
+              { id: 'block', label: `Block ${sender}` },
+              // Blocking all of gmail.com etc. would be a mistake waiting to happen
+              ...(senderDomain && !FREE_MAIL.has(senderDomain) ? [{ id: 'blockDomain', label: `Block everyone at @${senderDomain}` }] : [])
+            ]
+        : []),
       { id: 'delete', label: inTrash ? 'Delete permanently…' : 'Delete', shortcut: sc('delete') },
       SEP,
       ...(single
@@ -494,7 +512,30 @@ export function App() {
       case 'junk':
         return void removeAndAdvance((k) => api.junkMessages(k), 'move to Junk', keys)
       case 'notJunk':
-        return void removeAndAdvance((k) => api.moveMessages(k, inbox!.id), 'move to Inbox', keys)
+        // Not junk also lifts a block on that sender, or their next message would go straight back
+        if (senderBlocked) void api.unblockSender(senderBlocked).then(async () => setSettings(await api.getSettings()))
+        return void removeAndAdvance((k) => api.notJunkMessages(k), 'move to Inbox', keys)
+      case 'phish':
+        return void removeAndAdvance((k) => api.reportPhishing(k), 'report phishing', keys).then(() => say('Reported as phishing and moved to Junk.'))
+      case 'block':
+      case 'blockDomain': {
+        const entry = pick === 'block' ? sender! : `@${senderDomain}`
+        return void api
+          .blockSender(entry, pick === 'block' ? single?.key : undefined)
+          .then(async (n) => {
+            setSettings(await api.getSettings())
+            say(`Blocked ${entry}${n ? `; ${n} message${n === 1 ? '' : 's'} moved to Junk` : ''}. Their mail now goes to Junk (undo in Settings → General).`)
+          })
+          .catch(report('block the sender'))
+      }
+      case 'unblock':
+        return void api
+          .unblockSender(senderBlocked!)
+          .then(async () => {
+            setSettings(await api.getSettings())
+            say(`Unblocked ${senderBlocked}.`)
+          })
+          .catch(report('unblock'))
       case 'delete':
         return void remove(keys)
       case 'print':

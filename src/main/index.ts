@@ -18,6 +18,8 @@ import * as pace from './pace'
 import * as outbox from './outbox'
 import { mailtoFromArgs, parseMailto, type MailtoRequest } from './mailto'
 import { detectProvider } from './signin'
+import { assessMessage } from './security'
+import { blockEntry, isBlocked } from '@shared/blocking'
 import { createTray, hasTray, iconPath, setTrayUnread } from './tray'
 import { checkForUpdates, getUpdateStatus, initUpdater, installUpdate, openReleasePage, showUpdateFile } from './updater'
 import { captureMode, runCapture, useProfileOverride } from './devcapture'
@@ -182,6 +184,31 @@ function groupByFolder(keys: string[]): { accountId: string; folderId: string; k
 }
 
 /**
+ * Junk, not junk, phishing: reported to the provider's filter where it has one (Microsoft 365), which
+ * also moves them; otherwise moved (on Gmail, moving into or out of Spam is itself the report).
+ */
+async function reportOrMove(keys: string[], action: 'junk' | 'notJunk' | 'phish'): Promise<void> {
+  for (const g of groupByFolder(keys)) {
+    const acc = account(g.accountId)
+    const dest = db.folderByRole(acc.id, action === 'notJunk' ? 'inbox' : 'junk')
+    if (!dest) throw new Error(`${acc.name} has no ${action === 'notJunk' ? 'Inbox' : 'Junk'} folder.`)
+    if (dest.id === g.folderId) continue
+    const removed = db.removeLocal(g.keys)
+    send('mail:changed', {})
+    try {
+      const c = sync.connector(acc)
+      const reported = c.report ? await c.report(g.folderId, g.remoteIds, action) : false
+      if (!reported) await c.move(g.folderId, g.remoteIds, dest.id)
+    } catch (e) {
+      db.restoreLocal(removed)
+      send('mail:changed', {})
+      throw e
+    }
+    if (db.getFolderState(acc.id, dest.id) !== null) void sync.syncAccount(acc, dest.id)
+  }
+}
+
+/**
  * Move or delete: take the messages out of the list immediately, then tell the server.
  * If the server refuses, put them back and report the error.
  */
@@ -259,6 +286,14 @@ async function compiled(out: Outgoing, forDraft: boolean) {
       { forDraft }
     )
   }
+}
+
+/** The phishing check, worked out fresh each time (cheap, and improves as the rules do) */
+function withSecurity(body: MessageBody, m: MessageSummary | null): MessageBody {
+  // Your own sent mail and drafts have nothing to check
+  const role = m ? db.getFolder(m.accountId, m.folderId)?.role : undefined
+  if (!m || role === 'sent' || role === 'drafts') return body
+  return { ...body, security: assessMessage(body.authResults ?? [], m.from) }
 }
 
 /** Actually send: compile, hand to the account's server, then tidy up the draft and refresh Sent */
@@ -520,13 +555,13 @@ const api: Api = {
     return db.search(query, limit)
   },
   async getBody(key) {
-    const cached = db.getCachedBody(key)
-    if (cached) return cached
     const m = db.getMessage(key)
+    const cached = db.getCachedBody(key)
+    if (cached) return withSecurity(cached, m)
     if (!m) throw new Error('Message not found')
     const body: MessageBody = { key, ...(await sync.connector(account(m.accountId)).fetchBody(m.folderId, m.remoteId)) }
     db.cacheBody(body)
-    return body
+    return withSecurity(body, m)
   },
   setRead: (keys, read) => withFlags(keys, { read }),
   setFlagged: (keys, flagged) => withFlags(keys, { flagged }),
@@ -546,12 +581,33 @@ const api: Api = {
       return archive.id
     })
   },
-  async junkMessages(keys) {
-    await relocate(keys, (accountId, from) => {
-      const junk = db.folderByRole(accountId, 'junk')
-      if (!junk) throw new Error(`${account(accountId).name} has no Junk folder.`)
-      return junk.id === from ? from : junk.id
-    })
+  junkMessages: (keys) => reportOrMove(keys, 'junk'),
+  notJunkMessages: (keys) => reportOrMove(keys, 'notJunk'),
+  reportPhishing: (keys) => reportOrMove(keys, 'phish'),
+  async blockSender(input, fromMessageKey) {
+    const entry = blockEntry(input)
+    if (!entry) throw new Error(`"${input}" isn't an email address or domain`)
+    const list = store.getSettings().blockedSenders
+    if (!list.includes(entry)) store.saveSettings({ blockedSenders: [...list, entry] })
+    // Microsoft 365 keeps its own blocked list (applies on every device); blocking from a message adds the sender there too
+    let done: string | null = null
+    const m = fromMessageKey ? db.getMessage(fromMessageKey) : null
+    if (m && !entry.startsWith('@')) {
+      const c = sync.connector(account(m.accountId))
+      if (c.blockSender) {
+        await c.blockSender(m.folderId, m.remoteId)
+        db.removeLocal([m.key])
+        send('mail:changed', {})
+        done = m.key
+      }
+    }
+    // What's already in the inbox from them goes too
+    const keys = db.inboxKeysFrom((a) => isBlocked(a, [entry])).filter((k) => k !== done)
+    if (keys.length) await reportOrMove(keys, 'junk')
+    return keys.length + (done ? 1 : 0)
+  },
+  async unblockSender(entry) {
+    store.saveSettings({ blockedSenders: store.getSettings().blockedSenders.filter((x) => x !== entry) })
   },
   async markFolderRead(accountId, folderId) {
     const targets =

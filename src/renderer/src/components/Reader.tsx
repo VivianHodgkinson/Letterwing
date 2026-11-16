@@ -230,6 +230,12 @@ function MessageCard(props: {
           </button>
         </div>
       )}
+      {body?.security && (body.security.level === 'danger' || body.security.level === 'warn') && (
+        <div className={`security-banner ${body.security.level}`} role="alert">
+          <b>{body.security.level === 'danger' ? '⚠ Be careful with this message.' : '⚠ This message may not be what it seems.'}</b>{' '}
+          {body.security.reasons.join(' ')} Don't click links, open attachments or reply with personal details unless you're sure it's genuine.
+        </div>
+      )}
       {body?.invite && <InviteCard invite={body.invite} onRespond={(a) => props.onRespond(m, a)} />}
       {body?.hasRemoteContent && !remoteImages && (
         <div className="notice">
