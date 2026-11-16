@@ -422,6 +422,33 @@ const api: Api = {
   async setDefaultMailApp() {
     return app.setAsDefaultProtocolClient('mailto') && app.isDefaultProtocolClient('mailto')
   },
+  async printDocument(html, title, pdf) {
+    // A hidden window with scripts off renders the page; the page itself carries a strict CSP too
+    const file = await tempFile(`${safeName(title).replace(/\.html?$/i, '')}.html`, Buffer.from(html))
+    const page = new BrowserWindow({ show: false, width: 900, height: 1200, webPreferences: { javascript: false, sandbox: true, contextIsolation: true } })
+    try {
+      await page.loadFile(file)
+      // Let images (data: and, when allowed, web ones) finish decoding
+      await new Promise((r) => setTimeout(r, 400))
+      if (pdf) {
+        // (Screenshot harness only: write straight to a known file instead of asking)
+        const fixed = captureMode ? process.env.LETTERWING_PDF_OUT : undefined
+        const r = fixed
+          ? { canceled: false, filePath: fixed }
+          : await dialog.showSaveDialog(win!, { title: 'Save as PDF', defaultPath: join(app.getPath('documents'), `${safeName(title)}.pdf`), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+        if (r.canceled || !r.filePath) return false
+        // Letter where that's the norm, A4 everywhere else
+        const pageSize = ['US', 'CA', 'MX', 'PH'].includes(app.getLocaleCountryCode()) ? 'Letter' : 'A4'
+        await writeFile(r.filePath, await page.webContents.printToPDF({ printBackground: true, pageSize, generateDocumentOutline: false }))
+        return true
+      }
+      return await new Promise<boolean>((resolve, reject) =>
+        page.webContents.print({ silent: false, printBackground: true }, (ok, reason) => (ok || /cancel/i.test(reason) ? resolve(ok) : reject(new Error(`Couldn't print: ${reason}`))))
+      )
+    } finally {
+      page.destroy()
+    }
+  },
   async copyText(text) {
     clipboard.writeText(text)
   },

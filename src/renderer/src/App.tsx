@@ -29,6 +29,7 @@ import { colourMenu } from './menus'
 import { Sidebar, sortFolders } from './components/Sidebar'
 import { useKeymap } from './keymap'
 import { UpdatePill } from './components/Updates'
+import { printMessages } from './print'
 import { buildReply, messageFromLink, newMessage, type ReplyKind } from './replies'
 
 export interface View {
@@ -457,6 +458,9 @@ export function App() {
       SEP,
       ...(single
         ? [
+            { id: 'print', label: 'Print…', shortcut: sc('print') },
+            { id: 'printPdf', label: 'Save as PDF…' },
+            SEP,
             { id: 'copyFrom', label: 'Copy sender address', enabled: !!single.from?.address },
             { id: 'copySubject', label: 'Copy subject' }
           ]
@@ -493,6 +497,9 @@ export function App() {
         return void removeAndAdvance((k) => api.moveMessages(k, inbox!.id), 'move to Inbox', keys)
       case 'delete':
         return void remove(keys)
+      case 'print':
+      case 'printPdf':
+        return void printMessages([single!], { pdf: pick === 'printPdf', loadRemoteImages: !!settings?.loadRemoteImages }).catch(report('print'))
       case 'copyFrom':
         return void api.copyText(single!.from!.address)
       case 'copySubject':
@@ -791,6 +798,9 @@ export function App() {
     archive,
     moveToFolder: openMove,
     loadImages: () => setImagesRequest((n) => n + 1),
+    print: () => {
+      if (current) void printMessages([current], { pdf: false, loadRemoteImages: !!settings?.loadRemoteImages }).catch(fail)
+    },
     newMessage: () => {
       const a = defaultAccount()
       if (a) void startCompose(newMessage(a))
@@ -1041,6 +1051,7 @@ export function App() {
                         .catch(fail)
                     },
                     editDraft: (m) => void open(m),
+                    status: say,
                     respondInvite
                   }}
                 />

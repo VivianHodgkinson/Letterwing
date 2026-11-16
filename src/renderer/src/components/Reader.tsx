@@ -1,4 +1,5 @@
-import DOMPurify from 'dompurify'
+import { cleanBody, imagesAllowed } from '../mailHtml'
+import { printMessages } from '../print'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Account, CalendarEvent, Invite, MessageBody, MessageSummary, Settings } from '@shared/types'
 import { whenLabel } from './calendar/dates'
@@ -15,6 +16,8 @@ export interface ReaderActions {
   toggleRead(): void
   editDraft(message: MessageSummary): void
   respondInvite(message: MessageSummary, answer: 'accepted' | 'tentative' | 'declined'): void
+  /** Show a message in the app's notice bar */
+  status(message: string, error?: boolean): void
 }
 
 interface Props {
@@ -59,6 +62,10 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
   useEffect(() => {
     if (imagesRequest > 0) setAllowImages(true)
   }, [imagesRequest])
+  // Remember it for printing (only web images you chose to see get printed)
+  useEffect(() => {
+    if (allowImages && message) for (const m of thread.length ? thread : [message]) imagesAllowed.add(m.key)
+  }, [allowImages, thread, message?.key])
 
   if (!message)
     return (
@@ -73,6 +80,19 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
     )
 
   const multi = selectedCount > 1
+  const printMenu = async () => {
+    const whole = thread.length > 1
+    const pick = await api.showMenu([
+      { id: 'one', label: 'Print this message…' },
+      { id: 'onePdf', label: 'Save this message as PDF…' },
+      ...(whole
+        ? [{ type: 'separator' as const }, { id: 'all', label: `Print the conversation (${thread.length})…` }, { id: 'allPdf', label: 'Save the conversation as PDF…' }]
+        : [])
+    ])
+    if (!pick) return
+    const which = pick.startsWith('all') ? thread : [message]
+    void printMessages(which, { pdf: pick.endsWith('Pdf'), loadRemoteImages: settings.loadRemoteImages }).catch((e: Error) => actions.status(e.message, true))
+  }
   return (
     <div className="reader">
       <div className="reader-toolbar">
@@ -95,6 +115,9 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
         </button>
         <button className={`ghost ${message.flagged ? 'flag-on' : ''}`} onClick={actions.toggleFlag}>
           ⚑ {message.flagged ? 'Unflag' : 'Flag'}
+        </button>
+        <button className="ghost" title="Print or save as PDF (Ctrl+P prints)" onClick={() => void printMenu()}>
+          🖨 Print
         </button>
         {multi && <span className="multi-note">{selectedCount} selected</span>}
       </div>
@@ -359,10 +382,7 @@ function MailFrame({ body, remoteImages }: { body: MessageBody; remoteImages: bo
 }
 
 function renderDoc(body: MessageBody, remoteImages: boolean): string {
-  const content = body.html
-    ? // <style> is kept (newsletters depend on it); the frame's CSP stops CSS from loading anything remote
-      DOMPurify.sanitize(body.html, { FORCE_BODY: true, ADD_TAGS: ['style'], FORBID_TAGS: ['form', 'input', 'button'], ADD_ATTR: ['target'] })
-    : `<pre class="plain">${escapeHtml(body.text ?? '')}</pre>`
+  const content = cleanBody(body)
   const csp = `default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: cid:${remoteImages ? ' https: http:' : ''}; font-src data:`
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
@@ -377,6 +397,3 @@ function renderDoc(body: MessageBody, remoteImages: boolean): string {
 </style></head><body>${content}</body></html>`
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
-}

@@ -33,6 +33,8 @@ export interface Api {
   confirm(question: { message: string; detail?: string; ok: string }): Promise<boolean>
   /** Native question with several answers (plus Cancel). Resolves with the chosen option's index, or -1 for Cancel. */
   choose(question: { message: string; detail?: string; options: string[] }): Promise<number>
+  /** Print a ready-made page through the system dialog, or (pdf) save it as a PDF. False if cancelled. */
+  printDocument(html: string, title: string, pdf: boolean): Promise<boolean>
   copyText(text: string): Promise<void>
   /** Mail links (mailto:) that arrived before the window was ready; the renderer asks once it has loaded */
   takePendingMailto(): Promise<MailtoRequest[]>

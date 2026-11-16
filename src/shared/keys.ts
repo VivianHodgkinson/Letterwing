@@ -36,6 +36,7 @@ export type ActionId =
   | 'openSettings'
   | 'addAccount'
   | 'loadImages'
+  | 'print'
   | 'goToMail'
   | 'goToCalendar'
   | 'newEvent'
@@ -83,6 +84,7 @@ export const ACTIONS: ActionInfo[] = [
   { id: 'archive', label: 'Archive', group: 'Message', scope: 'mail' },
   { id: 'moveToFolder', label: 'Move to folder…', group: 'Message', scope: 'mail' },
   { id: 'loadImages', label: 'Load remote images', group: 'Message', scope: 'mail' },
+  { id: 'print', label: 'Print message', group: 'Message', scope: 'mail' },
   { id: 'newMessage', label: 'New message', group: 'Compose', whileTyping: true, scope: 'mail' },
   { id: 'send', label: 'Send', group: 'Compose', whileTyping: true },
   { id: 'saveDraft', label: 'Save draft', group: 'Compose', whileTyping: true },
@@ -129,6 +131,7 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       archive: ['Backspace'],
       moveToFolder: ['Ctrl+Shift+V'],
       loadImages: [],
+      print: ['Ctrl+P'],
       newMessage: ['Ctrl+N', 'Ctrl+Shift+M'],
       send: ['Ctrl+Enter', 'Alt+S'],
       saveDraft: ['Ctrl+S'],
@@ -174,6 +177,7 @@ export const PRESETS: Record<'classic' | 'singlekey', { name: string; keys: Keym
       archive: ['E'],
       moveToFolder: ['V'],
       loadImages: [],
+      print: ['Ctrl+P'],
       newMessage: ['C'],
       send: ['Ctrl+Enter'],
       saveDraft: ['Ctrl+S'],
