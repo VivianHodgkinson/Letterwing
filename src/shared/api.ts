@@ -99,6 +99,8 @@ export interface Api {
   // writing
   suggestContacts(prefix: string): Promise<Contact[]>
   pickFiles(): Promise<OutgoingAttachment[]>
+  /** Choose a picture (for a signature): returned as a data: URL, or null if cancelled */
+  pickImage(): Promise<string | null>
   attachPaths(paths: string[]): Promise<OutgoingAttachment[]>
   /** Saves to the server's Drafts folder; returns the message with its new server copy recorded */
   saveDraft(message: Outgoing): Promise<Outgoing>

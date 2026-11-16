@@ -275,6 +275,32 @@ function AccountSettings({ account: a, onChange, onRemove }: { account: Account;
   const [open, setOpen] = useState(false)
   const [senderName, setSenderName] = useState(a.senderName ?? '')
   const sig = useRef<HTMLDivElement>(null)
+  const [sigError, setSigError] = useState<string | null>(null)
+  const saveSig = () => void onChange({ signature: sig.current?.innerHTML ?? '' })
+
+  /** Put a picture where the cursor is (or at the end), no wider than a signature should be, and save */
+  const insertPicture = async (url: string) => {
+    const el = sig.current
+    if (!el) return
+    setSigError(null)
+    const size = await new Promise<{ w: number }>((resolve) => {
+      const probe = new Image()
+      probe.onload = () => resolve({ w: probe.naturalWidth })
+      probe.onerror = () => resolve({ w: 0 })
+      probe.src = url
+    })
+    const img = document.createElement('img')
+    img.src = url
+    img.alt = ''
+    if (size.w > 500) img.width = 500
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      const range = sel.getRangeAt(0)
+      range.deleteContents()
+      range.insertNode(img)
+    } else el.appendChild(img)
+    saveSig()
+  }
 
   useEffect(() => {
     if (open && sig.current) sig.current.innerHTML = a.signature ?? ''
@@ -310,7 +336,47 @@ function AccountSettings({ account: a, onChange, onRemove }: { account: Account;
           <label>
             Signature <small>(paste your existing signature to keep its formatting and logo)</small>
           </label>
-          <div ref={sig} className="editor signature-editor" contentEditable suppressContentEditableWarning onBlur={() => void onChange({ signature: sig.current?.innerHTML ?? '' })} />
+          <div
+            ref={sig}
+            className="editor signature-editor"
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={saveSig}
+            onPaste={(e) => {
+              const file = [...e.clipboardData.files].find((f) => f.type.startsWith('image/'))
+              if (!file) return
+              e.preventDefault()
+              void fileToDataUrl(file)
+                .then(insertPicture)
+                .catch((err: Error) => setSigError(err.message))
+            }}
+            onDrop={(e) => {
+              const file = [...e.dataTransfer.files].find((f) => f.type.startsWith('image/'))
+              if (!file) return
+              e.preventDefault()
+              void fileToDataUrl(file)
+                .then(insertPicture)
+                .catch((err: Error) => setSigError(err.message))
+            }}
+          />
+          <div className="row">
+            <button
+              type="button"
+              className="ghost small"
+              onClick={() =>
+                void api
+                  .pickImage()
+                  .then((url) => {
+                    if (url) void insertPicture(url)
+                  })
+                  .catch((e: Error) => setSigError(e.message))
+              }
+            >
+              Add picture…
+            </button>
+            <span className="hint">A logo, or a whole signature made as a picture. You can also paste or drag one in.</span>
+          </div>
+          {sigError && <div className="error">{sigError}</div>}
           <label className="check">
             <input type="checkbox" checked={!!a.signatureOnReplies} onChange={(e) => void onChange({ signatureOnReplies: e.target.checked })} />
             Also add it to replies and forwards
@@ -502,4 +568,14 @@ function BlockedSenders({ list, onChange }: { list: string[]; onChange(patch: Pa
       {error && <div className="error">{error}</div>}
     </>
   )
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.size > 1_500_000) return reject(new Error('That picture is over 1.5 MB. Use a smaller one.'))
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result))
+    r.onerror = () => reject(r.error)
+    r.readAsDataURL(file)
+  })
 }

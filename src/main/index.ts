@@ -700,6 +700,16 @@ const api: Api = {
     const r = await dialog.showOpenDialog(win!, { properties: ['openFile', 'multiSelections'], title: 'Attach files' })
     return r.canceled ? [] : Promise.all(r.filePaths.map(fromPath))
   },
+  async pickImage() {
+    const r = await dialog.showOpenDialog(win!, { title: 'Choose a picture', properties: ['openFile'], filters: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] })
+    if (r.canceled || !r.filePaths[0]) return null
+    const path = r.filePaths[0]
+    const st = await stat(path)
+    // Signatures go out with every message: keep them small
+    if (st.size > 1_500_000) throw new Error('That picture is over 1.5 MB. Use a smaller one (signature pictures are usually well under 200 KB).')
+    const type = detectMimeType(path) || 'image/png'
+    return `data:${type};base64,${(await readFile(path)).toString('base64')}`
+  },
   async attachPaths(paths) {
     return Promise.all(paths.map(fromPath))
   },

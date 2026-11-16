@@ -1,8 +1,13 @@
 # Changelog
 
+## 0.1.13
+
+- Signatures follow dark mode in the editor: text in the theme's colours, logos and pictures kept as they are.
+- Signatures can include pictures: *Add picture…* in Settings → Accounts → Name & signature, or paste or drag one in. A whole signature made as a picture works too.
+
 ## 0.1.12
 
-- The message editor follows dark mode too: your text in the theme's colours, with your signature and the quoted original shown in a light box so logos and their own colours stay readable. Recipients still get normal black on white.
+- The message editor follows dark mode too: your text, your signature and the quoted original all in dark colours, with pictures such as logos kept as they are. Recipients still get normal black on white.
 
 ## 0.1.11
 

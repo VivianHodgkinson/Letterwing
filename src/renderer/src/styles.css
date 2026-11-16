@@ -506,18 +506,17 @@ body.dragging-resize, body.dragging-resize * { cursor: ns-resize !important; use
 /* ------------------------------------------------------------ editor in dark mode
    Display only: nothing here goes into the message, so recipients still get normal black on white.
    Your own text takes the theme's colours; the signature and the quoted original (which carry their own
-   colours and logos) sit in a light box; pasted black text and white backgrounds are shown in theme colours. */
+   colours and logos) are flipped dark with pictures kept as they are; pasted black text and white backgrounds are shown in theme colours. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-mailcolors='original']) .editor { background: var(--bg-0); color: var(--text); caret-color: var(--text); }
   :root:not([data-mailcolors='original']) .editor a { color: var(--accent); }
-  :root:not([data-mailcolors='original']) .editor .ink-signature,
-  :root:not([data-mailcolors='original']) .editor .ink-reply-header,
-  :root:not([data-mailcolors='original']) .editor .ink-quoted { background: #fff; color: #1a1d24; padding: 8px 12px; }
-  :root:not([data-mailcolors='original']) .editor .ink-signature { border-radius: 6px; margin: 8px 0; }
-  :root:not([data-mailcolors='original']) .editor .ink-reply-header { border-radius: 6px 6px 0 0; margin-top: 8px; }
-  :root:not([data-mailcolors='original']) .editor .ink-quoted { border-radius: 0 0 6px 6px; }
-  :root:not([data-mailcolors='original']) .editor .ink-signature a,
-  :root:not([data-mailcolors='original']) .editor .ink-quoted a { color: #2563eb; }
+  /* Signature and quoted original carry their own colours: flipped like a designed email in the reader, with
+     pictures flipped back to their real colours (a white backing keeps see-through logos visible) */
+  :root:not([data-mailcolors='original']) .editor :is(.ink-signature, .ink-reply-header, .ink-quoted) { filter: invert(1) hue-rotate(180deg); }
+  :root:not([data-mailcolors='original']) .editor :is(.ink-signature, .ink-reply-header, .ink-quoted) :is(img, video, picture, svg, [style*='background-image'], [background]) {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  :root:not([data-mailcolors='original']) .editor :is(.ink-signature, .ink-reply-header, .ink-quoted) img { background: #fff; border-radius: 4px; }
   :root:not([data-mailcolors='original'])
     .editor
     :is([style*='color: rgb(0, 0, 0)'], [style*='color:rgb(0,0,0)'], [style*='color: black'], [style*='color:black'], [style*='color:#000'], [style*='color: #000'], [style*='color: windowtext'], [style*='color:windowtext'], font[color='#000000'], font[color='black']):not(.ink-signature *):not(.ink-quoted *):not(.ink-reply-header *) {
