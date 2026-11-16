@@ -1,4 +1,4 @@
-import type { Account, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
+import type { Account, MailtoRequest, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
 
 /** One entry of a right-click menu. The menu is drawn by the OS; the renderer gets back the id that was clicked. */
 export interface MenuItem {
@@ -31,7 +31,14 @@ export interface Api {
   showMenu(items: MenuItem[], at?: { x: number; y: number }): Promise<string | null>
   /** Native yes/no question. Resolves true when the user picks `ok`. */
   confirm(question: { message: string; detail?: string; ok: string }): Promise<boolean>
+  /** Native question with several answers (plus Cancel). Resolves with the chosen option's index, or -1 for Cancel. */
+  choose(question: { message: string; detail?: string; options: string[] }): Promise<number>
   copyText(text: string): Promise<void>
+  /** Mail links (mailto:) that arrived before the window was ready; the renderer asks once it has loaded */
+  takePendingMailto(): Promise<MailtoRequest[]>
+  /** Whether Letterwing opens mail links, and making it do so */
+  mailAppStatus(): Promise<{ isDefault: boolean; canSet: boolean }>
+  setDefaultMailApp(): Promise<boolean>
 
   listAccounts(): Promise<Account[]>
   /** Who hosts this address, and whether this build can sign in there */
@@ -91,7 +98,8 @@ export interface Api {
   listCalendars(): Promise<CalendarInfo[]>
   listEvents(from: number, to: number): Promise<CalendarEvent[]>
   saveEvent(input: EventInput): Promise<void>
-  deleteEvent(key: string): Promise<void>
+  /** For a repeating event: just this occurrence (default) or the whole series */
+  deleteEvent(key: string, scope?: 'occurrence' | 'series'): Promise<void>
   respondToEvent(key: string, answer: 'accepted' | 'tentative' | 'declined', comment?: string): Promise<void>
   /** Answer the invitation in a message; the message then moves to Deleted Items */
   respondToInvite(messageKey: string, answer: 'accepted' | 'tentative' | 'declined', comment?: string): Promise<void>
@@ -103,5 +111,5 @@ export type ApiMethod = keyof Api
 export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: string }
 
 /** Push events from main to renderer */
-export type EventChannel = 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message' | 'calendar:changed' | 'open:event' | 'update:status' | 'compose:new'
+export type EventChannel = 'compose:mailto' | 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message' | 'calendar:changed' | 'open:event' | 'update:status' | 'compose:new'
 export type SyncEvent = SyncStatus

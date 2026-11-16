@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify'
-import type { Account, Address, MessageBody, MessageSummary, Outgoing } from '@shared/types'
+import type { Account, Address, MailtoRequest, MessageBody, MessageSummary, Outgoing } from '@shared/types'
 import { whoFull } from './format'
 
 export type ReplyKind = 'reply' | 'replyAll' | 'forward'
@@ -17,6 +17,18 @@ export function newMessage(account: Account, to: Address[] = []): Outgoing {
     html: `<p><br></p>${account.signature ? SIGNATURE(account.signature) : ''}`,
     attachments: []
   }
+}
+
+/** A new message from a mail link (mailto:): its addresses, subject and text, then the signature */
+export function messageFromLink(account: Account, link: MailtoRequest): Outgoing {
+  const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
+  const text = link.body
+    ? link.body
+        .split(/\r?\n/)
+        .map((line) => `<p>${line ? esc(line) : '<br>'}</p>`)
+        .join('')
+    : '<p><br></p>'
+  return { ...newMessage(account, link.to), cc: link.cc, bcc: link.bcc, subject: link.subject, html: text + (account.signature ? SIGNATURE(account.signature) : '') }
 }
 
 /**

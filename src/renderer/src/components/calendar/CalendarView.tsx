@@ -7,6 +7,7 @@ import { addDays, addMonths, rangeLabel, sameDay, startOfDay, startOfMonth, star
 import { EventEditor } from './EventEditor'
 import { EventPanel } from './EventPanel'
 import { MonthGrid } from './MonthGrid'
+import { useEventDrag } from './drag'
 import { HOUR, TimeGrid } from './TimeGrid'
 
 export interface CalendarHandle {
@@ -165,47 +166,71 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
     }
   }
 
-  const editEvent = (ev: CalendarEvent) =>
-    setEditing({
-      input: {
-        key: ev.key,
-        accountId: ev.accountId,
-        calendarId: ev.calendarId,
-        title: ev.title,
-        start: ev.start,
-        end: ev.end,
-        allDay: ev.allDay,
-        location: ev.location,
-        description: ev.description,
-        attendees: ev.attendees.filter((a) => a.address !== ev.organizer?.address).map(({ name, address }) => ({ name, address })),
-        repeat: 'none',
-        online: !!ev.joinUrl
-      },
-      occurrence: ev.recurring
-    })
+  /** An event as the editor's input, ready to change and save */
+  const inputFor = (ev: CalendarEvent): EventInput => ({
+    key: ev.key,
+    accountId: ev.accountId,
+    calendarId: ev.calendarId,
+    title: ev.title,
+    start: ev.start,
+    end: ev.end,
+    allDay: ev.allDay,
+    location: ev.location,
+    description: ev.description,
+    attendees: ev.attendees.filter((a) => a.address !== ev.organizer?.address).map(({ name, address }) => ({ name, address })),
+    repeat: 'none',
+    online: !!ev.joinUrl
+  })
+
+  const editEvent = (ev: CalendarEvent) => setEditing({ input: inputFor(ev), occurrence: ev.recurring })
 
   const isInvited = (ev: CalendarEvent) => !ev.isOrganizer && ev.attendees.length > 0
 
   const deleteEvent = async (ev: CalendarEvent) => {
     const invited = isInvited(ev)
-    const what = ev.recurring && !ev.seriesId ? 'every occurrence of this repeating event' : 'this event'
-    const ok = await api.confirm(
-      invited
-        ? {
-            message: `Decline "${ev.title}"?`,
-            detail: 'The organizer is told you are not coming.',
-            ok: 'Decline'
-          }
-        : {
-            message: `Delete ${what}?`,
-            detail: ev.attendees.length ? 'Attendees will be told it is cancelled.' : undefined,
-            ok: 'Delete'
-          }
-    )
-    if (!ok) return
+    const told = ev.attendees.length ? 'Attendees will be told it is cancelled.' : undefined
+    let scope: 'occurrence' | 'series' | undefined
+    if (invited) {
+      if (!(await api.confirm({ message: `Decline "${ev.title}"?`, detail: 'The organizer is told you are not coming.', ok: 'Decline' }))) return
+    } else if (ev.recurring) {
+      const pick = await api.choose({ message: `Delete "${ev.title}"?`, detail: told, options: ['Delete this event', 'Delete all events in the series'] })
+      if (pick < 0) return
+      scope = pick === 1 ? 'series' : 'occurrence'
+    } else if (!(await api.confirm({ message: `Delete "${ev.title}"?`, detail: told, ok: 'Delete' }))) return
     if (selected === ev.key) setSelected(null)
-    await run(api.deleteEvent(ev.key), invited ? 'Declined.' : 'Deleted.')
+    await run(api.deleteEvent(ev.key, scope), invited ? 'Declined.' : 'Deleted.')
   }
+
+  /** Who can drag an event: your own, on a calendar you can change */
+  const canDrag = (ev: CalendarEvent) => {
+    const cal = calById.get(calKey(ev))
+    return !!cal && !cal.readOnly && !ev.cancelled && !isInvited(ev)
+  }
+
+  /** An event dropped at a new time (or resized) */
+  const moveEvent = async (ev: CalendarEvent, start: number, end: number) => {
+    let scope: 'occurrence' | 'series' = 'occurrence'
+    if (ev.recurring) {
+      const pick = await api.choose({ message: `Move "${ev.title}"`, detail: 'This is a repeating event.', options: ['Move this event', 'Move all events in the series'] })
+      if (pick < 0) return
+      if (pick === 1) scope = 'series'
+    }
+    const others = ev.attendees.filter((a) => a.address !== ev.organizer?.address).length
+    if (others && !(await api.confirm({ message: `Send the new time to ${others === 1 ? 'the person' : `the ${others} people`} invited?`, detail: `${ev.title}: ${new Date(start).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`, ok: 'Move and send' })))
+      return
+    // Show it at the new time straight away; the reload afterwards has the server's view
+    if (scope === 'occurrence') setEvents((list) => list.map((x) => (x.key === ev.key ? { ...x, start, end } : x)))
+    try {
+      await api.saveEvent({ ...inputFor(ev), start, end, scope })
+      onStatus(others ? 'Moved, and the update was sent.' : 'Moved.')
+    } catch (e) {
+      onStatus(`Couldn't move it: ${(e as Error).message}`, true)
+    }
+    void load()
+  }
+
+  const drag = useEventDrag({ canDrag, onCommit: (ev, start, end) => void moveEvent(ev, start, end) })
+
 
   const fmtTime = (t: number) =>
     new Date(t).toLocaleTimeString([], {
@@ -532,6 +557,8 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
                     selected={selected}
                     onSelect={(e) => setSelected(e.key)}
                     onCreate={(s, e, a) => create(s, e, a, pane.accountId ?? one)}
+                    drag={drag}
+                    canDrag={canDrag}
                     onDay={(d) => {
                       setAnchor(d)
                       void onSettings({ calendarView: 'day' })
@@ -547,6 +574,8 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
                     workEnd={settings.workDayEnd}
                     onSelect={(e) => setSelected(e.key)}
                     onCreate={(s, e, a) => create(s, e, a, pane.accountId ?? one)}
+                    drag={drag}
+                    canDrag={canDrag}
                     onDay={(d) => {
                       setAnchor(d)
                       void onSettings({ calendarView: 'day' })

@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '@shared/types'
 import { addDays, sameDay, startOfDay } from './dates'
-import { EventChip } from './TimeGrid'
+import { EventChip, type Drag } from './TimeGrid'
 
 const MAX_PER_DAY = 4
 
@@ -13,9 +13,12 @@ interface Props {
   onSelect(e: CalendarEvent): void
   onCreate(start: number, end: number, allDay: boolean): void
   onDay(day: number): void
+  drag: Drag
+  canDrag(e: CalendarEvent): boolean
 }
 
-export function MonthGrid({ days, month, events, colorOf, selected, onSelect, onCreate, onDay }: Props) {
+export function MonthGrid({ days, month, events: given, colorOf, selected, onSelect, onCreate, onDay, drag, canDrag }: Props) {
+  const events = drag.apply(given)
   const today = startOfDay(Date.now())
   return (
     <div className="monthgrid">
@@ -39,7 +42,7 @@ export function MonthGrid({ days, month, events, colorOf, selected, onSelect, on
               {new Date(d).getDate() === 1 ? new Date(d).toLocaleDateString([], { day: 'numeric', month: 'short' }) : new Date(d).getDate()}
             </button>
             {list.slice(0, MAX_PER_DAY).map((e) => (
-              <EventChip key={e.key} e={e} color={colorOf(e)} selected={selected === e.key} onSelect={onSelect} compact />
+              <EventChip key={e.key} e={e} color={colorOf(e)} selected={selected === e.key} onSelect={onSelect} compact drag={drag} canDrag={canDrag(e)} />
             ))}
             {list.length > MAX_PER_DAY && (
               <button className="mg-more" onClick={() => onDay(d)}>

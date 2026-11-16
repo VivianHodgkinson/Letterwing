@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CalendarEvent } from '@shared/types'
 import { addDays, sameDay, time } from './dates'
-import { layout } from './layout'
+import type { useEventDrag } from './drag'
+import { HOUR, layout } from './layout'
 
-export const HOUR = 48 // px per hour
+export { HOUR }
+export type Drag = ReturnType<typeof useEventDrag>
 
 interface Props {
   days: number[]
@@ -15,9 +17,13 @@ interface Props {
   onSelect(e: CalendarEvent): void
   onCreate(start: number, end: number, allDay: boolean): void
   onDay(day: number): void
+  /** Moving and resizing events by dragging */
+  drag: Drag
+  canDrag(e: CalendarEvent): boolean
 }
 
-export function TimeGrid({ days, events, colorOf, selected, workStart, workEnd, onSelect, onCreate, onDay }: Props) {
+export function TimeGrid({ days, events: given, colorOf, selected, workStart, workEnd, onSelect, onCreate, onDay, drag, canDrag }: Props) {
+  const events = drag.apply(given)
   const scroller = useRef<HTMLDivElement>(null)
   const [now, setNow] = useState(Date.now())
 
@@ -52,7 +58,7 @@ export function TimeGrid({ days, events, colorOf, selected, workStart, workEnd, 
             {allDay
               .filter((e) => e.start < addDays(d, 1) && e.end > d)
               .map((e) => (
-                <EventChip key={e.key} e={e} color={colorOf(e)} selected={selected === e.key} onSelect={onSelect} compact />
+                <EventChip key={e.key} e={e} color={colorOf(e)} selected={selected === e.key} onSelect={onSelect} compact drag={drag} canDrag={canDrag(e)} />
               ))}
           </div>
         ))}
@@ -95,7 +101,7 @@ export function TimeGrid({ days, events, colorOf, selected, workStart, workEnd, 
                     style={{ top: ((s - d) / 3_600_000) * HOUR, height: Math.max(18, ((t - s) / 3_600_000) * HOUR - 2), left: `${(col / cols) * 100}%`, width: `${100 / cols}%` }}
                   >
                     {/* Under 45 minutes there's room for one line: title and time side by side */}
-                    <EventChip e={e} color={colorOf(e)} selected={selected === e.key} onSelect={onSelect} short={t - s < 45 * 60_000} />
+                    <EventChip e={e} color={colorOf(e)} selected={selected === e.key} onSelect={onSelect} short={t - s < 45 * 60_000} drag={drag} canDrag={canDrag(e)} resizable />
                   </div>
                 ))}
                 {sameDay(d, now) && <div className="tg-now" style={{ top: ((now - d) / 3_600_000) * HOUR }} />}
@@ -108,24 +114,39 @@ export function TimeGrid({ days, events, colorOf, selected, workStart, workEnd, 
   )
 }
 
-export function EventChip(props: { e: CalendarEvent; color: string; selected: boolean; onSelect(e: CalendarEvent): void; compact?: boolean; short?: boolean }) {
-  const { e, color, selected, onSelect, compact, short } = props
-  const cls = ['ev', e.myStatus === 'declined' || e.cancelled ? 'declined' : '', e.myStatus === 'tentative' || e.showAs === 'tentative' ? 'tentative' : '', e.myStatus === 'needsAction' ? 'pending' : '', selected ? 'selected' : '', compact ? 'compact' : '', short ? 'short' : '']
+export function EventChip(props: {
+  e: CalendarEvent
+  color: string
+  selected: boolean
+  onSelect(e: CalendarEvent): void
+  compact?: boolean
+  short?: boolean
+  drag: Drag
+  /** Your own event on a calendar you can change */
+  canDrag: boolean
+  /** Timed events in the time grid: a handle on the bottom edge changes the length */
+  resizable?: boolean
+}) {
+  const { e, color, selected, onSelect, compact, short, drag, canDrag, resizable } = props
+  const dragging = drag.preview?.key === e.key
+  const cls = ['ev', e.myStatus === 'declined' || e.cancelled ? 'declined' : '', e.myStatus === 'tentative' || e.showAs === 'tentative' ? 'tentative' : '', e.myStatus === 'needsAction' ? 'pending' : '', selected ? 'selected' : '', compact ? 'compact' : '', short ? 'short' : '', canDrag ? 'movable' : '', dragging ? 'is-dragging' : '']
   return (
     <div
       className={cls.filter(Boolean).join(' ')}
       data-event={e.key}
       style={{ ['--ev' as string]: color }}
-      title={`${e.title}\n${e.allDay ? 'All day' : `${time(e.start)} – ${time(e.end)}`}${e.location ? `\n${e.location}` : ''}`}
+      title={dragging ? undefined : `${e.title}\n${e.allDay ? 'All day' : `${time(e.start)} – ${time(e.end)}`}${e.location ? `\n${e.location}` : ''}${canDrag ? '\nDrag to move' : ''}`}
+      onPointerDown={(ev) => drag.start(ev, e, 'move')}
       onClick={(ev) => {
         ev.stopPropagation()
-        onSelect(e)
+        if (!drag.wasDrag()) onSelect(e)
       }}
       onDoubleClick={(ev) => ev.stopPropagation()}
     >
       <span className="ev-title">{e.title}</span>
-      {!compact && !e.allDay && <span className="ev-time">{time(e.start)}</span>}
+      {!compact && !e.allDay && <span className="ev-time">{dragging && e.end > e.start ? `${time(e.start)} – ${time(e.end)}` : time(e.start)}</span>}
       {!compact && !short && e.location && <span className="ev-loc">{e.location}</span>}
+      {resizable && canDrag && <div className="ev-resize" onPointerDown={(ev) => drag.start(ev, e, 'resize')} />}
     </div>
   )
 }

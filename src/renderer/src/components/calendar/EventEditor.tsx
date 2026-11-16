@@ -47,6 +47,16 @@ export function EventEditor({ initial, calendars, accounts, occurrence, onSave, 
           if (e.key === 'Escape' && !busy) onClose()
         }}
       >
+        {occurrence && (
+          <div className="tabs scope-choice" role="radiogroup" aria-label="What to change">
+            <button type="button" className={ev.scope !== 'series' ? 'active' : ''} onClick={() => set({ scope: 'occurrence' })}>
+              This event
+            </button>
+            <button type="button" className={ev.scope === 'series' ? 'active' : ''} onClick={() => set({ scope: 'series' })}>
+              All events in the series
+            </button>
+          </div>
+        )}
         <input className="title-input" placeholder="Add a title" value={ev.title} onChange={(e) => set({ title: e.target.value })} autoFocus />
         <label>
           Calendar

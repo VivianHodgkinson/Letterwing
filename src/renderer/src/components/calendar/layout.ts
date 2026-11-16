@@ -1,3 +1,6 @@
+/** Pixels per hour in the time grid */
+export const HOUR = 48
+
 /** Side-by-side columns for overlapping events: each cluster of overlaps shares its width */
 export function layout<T extends { s: number; t: number }>(items: T[]): (T & { col: number; cols: number })[] {
   const sorted = [...items].sort((a, b) => a.s - b.s || b.t - a.t)

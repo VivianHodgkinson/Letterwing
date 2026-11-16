@@ -1,6 +1,6 @@
 import { createAccount, createCalendarObject, deleteCalendarObject, fetchCalendarObjects, fetchCalendars, updateCalendarObject, type DAVCalendar } from 'tsdav'
 import type { Account, Address, Attendee, CalendarEvent, CalendarInfo, EventInput, IcsSubscription, ResponseStatus } from '@shared/types'
-import { buildEventIcs, eventsFromIcs, setMyResponse, updateEventIcs, type RemoteEvent } from '../ical'
+import { buildEventIcs, eventsFromIcs, removeOccurrenceIcs, setMyResponse, updateEventIcs, updateOccurrenceIcs, updateSeriesIcs, type RemoteEvent } from '../ical'
 import type { GraphConnector } from './graph'
 
 export type Answer = 'accepted' | 'tentative' | 'declined'
@@ -14,7 +14,8 @@ export interface CalendarConnector {
   listEvents(calendarId: string, from: number, to: number): Promise<RemoteEvent[]>
   createEvent(input: EventInput): Promise<void>
   updateEvent(input: EventInput, existing: CalendarEvent): Promise<void>
-  deleteEvent(existing: CalendarEvent): Promise<void>
+  /** `scope` for a repeating event: just this occurrence (default) or the whole series */
+  deleteEvent(existing: CalendarEvent, scope?: 'occurrence' | 'series'): Promise<void>
   respond(existing: CalendarEvent, answer: Answer, comment?: string): Promise<void>
 }
 
@@ -168,14 +169,33 @@ export class GraphCalendar implements CalendarConnector {
   }
 
   async updateEvent(input: EventInput, existing: CalendarEvent): Promise<void> {
+    if (input.scope === 'series' && existing.seriesId) return this.updateSeries(input, existing)
     // On an occurrence ID this changes just that occurrence ("this event only")
     await this.graph.call(`/me/events/${existing.remoteId}`, { method: 'PATCH', body: JSON.stringify(this.body(input, false)) })
   }
 
-  async deleteEvent(existing: CalendarEvent): Promise<void> {
+  /**
+   * The whole series: details as edited, and the series moved by as much as this occurrence was moved.
+   * Times are shifted in the series' own time zone so a weekly 9:00 stays 9:00 across daylight saving.
+   */
+  private async updateSeries(input: EventInput, existing: CalendarEvent): Promise<void> {
+    const master = await this.graph.call<{ start: GTime; end: GTime; isAllDay: boolean }>(`/me/events/${existing.seriesId}?$select=start,end,isAllDay`)
+    const shift = input.start - existing.start
+    const length = input.allDay && input.end <= input.start ? 86_400_000 : input.end - input.start
+    const wall = (t: GTime) => Date.parse(t.dateTime.slice(0, 19) + 'Z')
+    const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 19) + '.0000000'
+    const start = wall(master.start) + shift
+    const { start: _s, end: _e, ...details } = this.body(input, false)
+    await this.graph.call(`/me/events/${existing.seriesId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ...details, start: { dateTime: fmt(start), timeZone: master.start.timeZone }, end: { dateTime: fmt(start + length), timeZone: master.end.timeZone } })
+    })
+  }
+
+  async deleteEvent(existing: CalendarEvent, scope: 'occurrence' | 'series' = 'occurrence'): Promise<void> {
     // An attendee "deleting" a meeting should decline it, so the organizer knows
     if (!existing.isOrganizer && existing.myStatus !== 'declined' && existing.attendees.length) await this.respond(existing, 'declined')
-    else await this.graph.call(`/me/events/${existing.remoteId}`, { method: 'DELETE' })
+    else await this.graph.call(`/me/events/${scope === 'series' && existing.seriesId ? existing.seriesId : existing.remoteId}`, { method: 'DELETE' })
   }
 
   async respond(existing: CalendarEvent, answer: Answer, comment?: string): Promise<void> {
@@ -254,15 +274,24 @@ export class CalDavCalendar implements CalendarConnector {
   }
 
   async updateEvent(input: EventInput, existing: CalendarEvent): Promise<void> {
-    if (existing.recurring) throw new Error('Editing repeating events on CalDAV calendars is not supported yet. Edit it in the calendar\'s own app.')
     const o = await this.object(existing)
-    const res = await updateCalendarObject({ calendarObject: { ...o, data: updateEventIcs(o.data, input, me(this.account)) }, headers: await this.headers() })
+    const who = me(this.account)
+    let data: string
+    if (!existing.recurring || existing.recurrenceId === undefined) data = updateEventIcs(o.data, input, who)
+    else if (input.scope === 'series') data = updateSeriesIcs(o.data, existing.recurrenceId, input, who)
+    else data = updateOccurrenceIcs(o.data, existing.recurrenceId, input, who)
+    const res = await updateCalendarObject({ calendarObject: { ...o, data }, headers: await this.headers() })
     await this.check(res, 'save the event')
   }
 
-  async deleteEvent(existing: CalendarEvent): Promise<void> {
+  async deleteEvent(existing: CalendarEvent, scope: 'occurrence' | 'series' = 'occurrence'): Promise<void> {
     if (!existing.isOrganizer && existing.attendees.length) return this.respond(existing, 'declined')
     const o = await this.object(existing)
+    if (existing.recurring && existing.recurrenceId !== undefined && scope === 'occurrence') {
+      // One occurrence: leave it out of the series
+      const res = await updateCalendarObject({ calendarObject: { ...o, data: removeOccurrenceIcs(o.data, existing.recurrenceId) }, headers: await this.headers() })
+      return this.check(res, 'delete the event')
+    }
     await this.check(await deleteCalendarObject({ calendarObject: o, headers: await this.headers() }), 'delete the event')
   }
 

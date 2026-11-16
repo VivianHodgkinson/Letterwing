@@ -134,10 +134,10 @@ export async function saveEvent(input: EventInput): Promise<void> {
   await syncOne(input.accountId, '', c, input.calendarId)
 }
 
-export async function deleteEvent(key: string): Promise<void> {
+export async function deleteEvent(key: string, scope?: 'occurrence' | 'series'): Promise<void> {
   const e = existing(key)
   const c = connectorById(e.accountId)
-  await c.deleteEvent(e)
+  await c.deleteEvent(e, scope)
   await syncOne(e.accountId, '', c, e.calendarId)
 }
 

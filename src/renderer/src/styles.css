@@ -471,3 +471,12 @@ kbd { font: 11.5px ui-monospace, monospace; background: var(--bg-3); border: 1px
 :root[data-layout='narrow'] .card-head .meta.right { flex-basis: 100%; padding-left: 56px; text-align: left; display: flex; gap: 8px; align-items: center; flex-direction: row-reverse; justify-content: flex-end; }
 :root[data-layout='narrow'] .card-actions { padding-left: 14px; flex-wrap: wrap; }
 .dialog > .tabs { overflow-x: auto; }
+
+/* Dragging events in the calendar */
+.ev.movable { cursor: grab; touch-action: none; }
+.ev.is-dragging { opacity: 0.85; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); z-index: 3; }
+body.dragging, body.dragging * { cursor: grabbing !important; user-select: none; }
+body.dragging-resize, body.dragging-resize * { cursor: ns-resize !important; user-select: none; }
+.ev { position: relative; }
+.ev-resize { position: absolute; left: 0; right: 0; bottom: -2px; height: 7px; cursor: ns-resize; }
+.scope-choice { margin-bottom: 4px; }

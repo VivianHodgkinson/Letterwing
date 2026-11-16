@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Account, Settings } from '@shared/types'
 import { KeybindingsEditor } from './KeybindingsEditor'
 import { UpdateSettings } from './Updates'
+import { api } from '../api'
 
 interface Props {
   settings: Settings
@@ -160,6 +161,8 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
               <input type="checkbox" checked={settings.closeToTray} onChange={(e) => void onChange({ closeToTray: e.target.checked })} />
               Keep running in the tray when the window is closed (new mail and reminders keep coming)
             </label>
+            <h3>Mail links</h3>
+            <DefaultMailApp />
             <h3>Updates</h3>
             <UpdateSettings autoUpdate={settings.autoUpdate} onAutoUpdate={(v) => void onChange({ autoUpdate: v })} />
           </>
@@ -405,4 +408,32 @@ function toHex(v: string): string {
   const c = document.createElement('canvas').getContext('2d')!
   c.fillStyle = v || '#000'
   return /^#[0-9a-f]{6}$/i.test(c.fillStyle) ? c.fillStyle : '#000000'
+}
+
+/** Make clicking an email address anywhere (browser, documents) open a new message here */
+function DefaultMailApp() {
+  const [status, setStatus] = useState<{ isDefault: boolean; canSet: boolean } | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  useEffect(() => {
+    void api.mailAppStatus().then(setStatus)
+  }, [])
+  if (!status) return null
+  if (status.isDefault) return <p className="hint">Letterwing opens email links (mailto:) on this computer.</p>
+  return (
+    <div className="row">
+      <button
+        className="ghost"
+        disabled={!status.canSet}
+        onClick={async () => {
+          const ok = await api.setDefaultMailApp()
+          setStatus(await api.mailAppStatus())
+          setNote(ok ? null : "Your system didn't let Letterwing change this itself. Choose Letterwing as the email app in your system's default apps settings.")
+        }}
+      >
+        Make Letterwing my default mail app
+      </button>
+      {!status.canSet && <span className="hint">Available in the installed app.</span>}
+      {note && <span className="hint">{note}</span>}
+    </div>
+  )
 }

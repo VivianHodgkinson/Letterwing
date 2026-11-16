@@ -149,6 +149,8 @@ export interface CalendarEvent {
   myStatus: ResponseStatus
   isOrganizer: boolean
   recurring: boolean
+  /** For one occurrence of a repeating event: the start it originally had in the series (RECURRENCE-ID) */
+  recurrenceId?: number
   cancelled: boolean
   showAs: 'free' | 'tentative' | 'busy' | 'oof' | 'elsewhere'
   /** Teams / Zoom / Meet link when there is one */
@@ -173,6 +175,8 @@ export interface EventInput {
   repeat: Repeat
   /** Microsoft 365: make it a Teams meeting */
   online: boolean
+  /** Editing a repeating event: just this occurrence (the default), or the whole series */
+  scope?: 'occurrence' | 'series'
 }
 
 /** A meeting request, update, reply or cancellation found in a message */
@@ -332,3 +336,12 @@ export const PALETTE: { name: string; color: string; swatch: string }[] = [
   { name: 'Brown', color: '#a18072', swatch: '🟤' },
   { name: 'Grey', color: '#8b8d98', swatch: '⚪' }
 ]
+
+/** What a mailto: link asks for: who to, subject and text (RFC 6068) */
+export interface MailtoRequest {
+  to: Address[]
+  cc: Address[]
+  bcc: Address[]
+  subject: string
+  body: string
+}

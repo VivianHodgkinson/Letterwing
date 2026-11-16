@@ -104,7 +104,7 @@ export function eventsFromIcs(data: string, remoteId: string, from: number, to: 
         const e = new ICAL.Event(x)
         const s = e.startDate.toJSDate()
         const end = (e.endDate ?? e.startDate).toJSDate()
-        if (end.getTime() > from && s.getTime() < to) out.push(describe(e, s, end, me, remoteId))
+        if (end.getTime() > from && s.getTime() < to) out.push({ ...describe(e, s, end, me, remoteId), recurrenceId: e.recurrenceId?.toJSDate().getTime() })
       }
       continue
     }
@@ -122,7 +122,7 @@ export function eventsFromIcs(data: string, remoteId: string, from: number, to: 
       const d = event.getOccurrenceDetails(next)
       const s = d.startDate.toJSDate()
       const end = d.endDate.toJSDate()
-      if (end.getTime() > from) out.push(describe(d.item, s, end, me, remoteId))
+      if (end.getTime() > from) out.push({ ...describe(d.item, s, end, me, remoteId), recurrenceId: next.toJSDate().getTime() })
     }
   }
   return out
@@ -275,4 +275,97 @@ export function buildInviteReply(ics: string, me: Address, status: 'accepted' | 
   a.setParameter('partstat', PARTSTAT[status])
   cal.addSubcomponent(reply)
   return cal.toString()
+}
+
+// ---------------------------------------------------------------- repeating events
+
+/** A time written the way `like` is: a date for all-day series, else in the same time zone (so DST stays right), else UTC */
+function timeLike(ms: number, like: ICAL.Time | null, allDay: boolean): ICAL.Time {
+  if (allDay || like?.isDate) return dateValue(ms, true)
+  const utc = ICAL.Time.fromJSDate(new Date(ms), true)
+  const zone = like?.zone
+  if (zone && zone !== ICAL.Timezone.utcTimezone && zone.tzid && zone.tzid !== 'floating' && zone.tzid !== 'UTC') return utc.convertToZone(zone)
+  return utc
+}
+
+function setTime(v: ICAL.Component, name: string, t: ICAL.Time): void {
+  v.removeAllProperties(name)
+  const p = v.addPropertyWithValue(name, t)
+  if (!t.isDate && t.zone && t.zone.tzid && t.zone !== ICAL.Timezone.utcTimezone && t.zone.tzid !== 'UTC' && t.zone.tzid !== 'floating') p.setParameter('tzid', t.zone.tzid)
+}
+
+function sameInstant(t: ICAL.Time | null | undefined, ms: number): boolean {
+  return !!t && Math.abs(t.toJSDate().getTime() - ms) < 1000
+}
+
+function seriesParts(data: string): { root: ICAL.Component; master: ICAL.Component; exceptions: ICAL.Component[]; start: ICAL.Time } {
+  const root = parse(data)
+  const all = root.getAllSubcomponents('vevent')
+  const master = all.find((c) => !c.hasProperty('recurrence-id'))
+  if (!master) throw new Error("This repeating event can't be edited here: the calendar only has single occurrences of it")
+  return { root, master, exceptions: all.filter((c) => c.hasProperty('recurrence-id')), start: master.getFirstPropertyValue('dtstart') as ICAL.Time }
+}
+
+/**
+ * Change one occurrence of a repeating event ("this event only"): an exception VEVENT with the
+ * occurrence's RECURRENCE-ID, created from the series the first time.
+ */
+export function updateOccurrenceIcs(data: string, recurrenceId: number, input: EventInput, me: Address): string {
+  const { root, master, exceptions, start } = seriesParts(data)
+  let x = exceptions.find((c) => sameInstant(c.getFirstPropertyValue('recurrence-id') as ICAL.Time, recurrenceId))
+  if (!x) {
+    x = new ICAL.Component('vevent')
+    const skip = new Set(['rrule', 'rdate', 'exdate', 'recurrence-id', 'dtstart', 'dtend', 'duration', 'dtstamp'])
+    for (const p of master.getAllProperties()) if (!skip.has(p.name)) x.addProperty(ICAL.Property.fromString(p.toICALString()))
+    setTime(x, 'recurrence-id', timeLike(recurrenceId, start, !!start?.isDate))
+    root.addSubcomponent(x)
+  }
+  const previous = people(new ICAL.Event(x), me.address.toLowerCase()).attendees
+  writeFields(x, input, me, previous)
+  setTime(x, 'dtstart', timeLike(input.start, start, input.allDay))
+  setTime(x, 'dtend', timeLike(input.allDay && input.end <= input.start ? input.start + 86_400_000 : input.end, start, input.allDay))
+  bump(x)
+  return root.toString()
+}
+
+/**
+ * Change every occurrence ("all events in the series"). The occurrence edited moves the whole series by
+ * the same amount (drag Tuesday's 9:00 to 10:00 and every one moves to 10:00). Occurrences changed by
+ * hand keep their own times; their RECURRENCE-IDs follow the shift so they still replace the right one.
+ */
+export function updateSeriesIcs(data: string, recurrenceId: number, input: EventInput, me: Address): string {
+  const { root, master, exceptions, start } = seriesParts(data)
+  const shift = input.start - recurrenceId
+  const masterStart = start.toJSDate().getTime() + shift
+  const previous = people(new ICAL.Event(master), me.address.toLowerCase()).attendees
+  writeFields(master, input, me, previous)
+  setTime(master, 'dtstart', timeLike(masterStart, start, input.allDay))
+  const length = input.allDay && input.end <= input.start ? 86_400_000 : input.end - input.start
+  setTime(master, 'dtend', timeLike(masterStart + length, start, input.allDay))
+  if (shift) {
+    for (const x of exceptions) {
+      const rid = x.getFirstPropertyValue('recurrence-id') as ICAL.Time
+      setTime(x, 'recurrence-id', timeLike(rid.toJSDate().getTime() + shift, start, !!rid.isDate))
+    }
+    for (const p of master.getAllProperties('exdate')) {
+      const t = p.getFirstValue() as ICAL.Time
+      p.setValue(timeLike(t.toJSDate().getTime() + shift, start, !!t.isDate))
+    }
+  }
+  bump(master)
+  return root.toString()
+}
+
+/** Remove one occurrence of a repeating event (EXDATE), dropping any changed copy of it */
+export function removeOccurrenceIcs(data: string, recurrenceId: number): string {
+  const { root, master, exceptions, start } = seriesParts(data)
+  for (const x of exceptions) if (sameInstant(x.getFirstPropertyValue('recurrence-id') as ICAL.Time, recurrenceId)) root.removeSubcomponent(x)
+  setTimeAdd(master, 'exdate', timeLike(recurrenceId, start, !!start?.isDate))
+  bump(master)
+  return root.toString()
+}
+
+function setTimeAdd(v: ICAL.Component, name: string, t: ICAL.Time): void {
+  const p = v.addPropertyWithValue(name, t)
+  if (!t.isDate && t.zone && t.zone.tzid && t.zone !== ICAL.Timezone.utcTimezone && t.zone.tzid !== 'UTC' && t.zone.tzid !== 'floating') p.setParameter('tzid', t.zone.tzid)
 }

@@ -1,6 +1,6 @@
 // @tz Africa/Johannesburg
 import assert from 'node:assert/strict'
-import { buildEventIcs, buildInviteReply, eventsFromIcs, parseInvite, setMyResponse, updateEventIcs } from '../src/main/ical'
+import { buildEventIcs, buildInviteReply, eventsFromIcs, parseInvite, removeOccurrenceIcs, setMyResponse, updateEventIcs, updateOccurrenceIcs, updateSeriesIcs } from '../src/main/ical'
 
 const me = { name: 'Test User', address: 'me@issue.test' }
 
@@ -125,4 +125,58 @@ assert.match(edited, /SEQUENCE:1/)
 const allDay = buildEventIcs({ ...input, allDay: true, repeat: 'none', attendees: [], start: Date.parse('2026-12-24T00:00:00+02:00'), end: Date.parse('2026-12-24T00:00:00+02:00') }, me).ics
 assert.match(allDay, /DTSTART;VALUE=DATE:20261224/)
 assert.match(allDay, /DTEND;VALUE=DATE:20261225/)
+{
+// ---------------------------------------------------------------- repeating events (CalDAV editing)
+// Weekly on Mondays 09:00 New York time, across the November DST change
+const ny = [
+  'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//test//EN',
+  'BEGIN:VTIMEZONE', 'TZID:America/New_York',
+  'BEGIN:DAYLIGHT', 'TZOFFSETFROM:-0500', 'TZOFFSETTO:-0400', 'TZNAME:EDT', 'DTSTART:19700308T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU', 'END:DAYLIGHT',
+  'BEGIN:STANDARD', 'TZOFFSETFROM:-0400', 'TZOFFSETTO:-0500', 'TZNAME:EST', 'DTSTART:19701101T020000', 'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU', 'END:STANDARD',
+  'END:VTIMEZONE',
+  'BEGIN:VEVENT', 'UID:standup@test', 'DTSTAMP:20261001T000000Z', 'SEQUENCE:0', 'SUMMARY:Standup',
+  'DTSTART;TZID=America/New_York:20261026T090000', 'DTEND;TZID=America/New_York:20261026T093000', 'RRULE:FREQ=WEEKLY;COUNT=4',
+  'END:VEVENT', 'END:VCALENDAR'
+].join('\r\n')
+const range = [Date.parse('2026-10-01T00:00:00Z'), Date.parse('2026-12-31T00:00:00Z')] as const
+const occ = (data: string) => eventsFromIcs(data, 'obj', range[0], range[1], 'me@x.co.za')
+const series = occ(ny)
+assert.equal(series.length, 4)
+assert.equal(series[0].start, Date.parse('2026-10-26T13:00:00Z'), '09:00 EDT')
+assert.equal(series[1].start, Date.parse('2026-11-02T14:00:00Z'), '09:00 EST after the change')
+assert.equal(series[1].recurrenceId, series[1].start, 'occurrences know their place in the series')
+const asInput = (e: (typeof series)[0], patch: Partial<Parameters<typeof updateOccurrenceIcs>[2]>) => ({
+  accountId: 'a', calendarId: 'c', title: e.title, start: e.start, end: e.end, allDay: false, location: '', description: '', attendees: [], repeat: 'none' as const, online: false, ...patch
+})
+
+// This event only: the second Monday moves an hour later, the others stay
+const hour = 3_600_000
+const one = updateOccurrenceIcs(ny, series[1].recurrenceId!, asInput(series[1], { start: series[1].start + hour, end: series[1].end + hour, title: 'Standup (moved)' }), me)
+assert.match(one, /RECURRENCE-ID;TZID=America\/New_York:20261102T090000/)
+let after = occ(one)
+assert.equal(after.length, 4, 'still four occurrences')
+assert.equal(after[1].start, series[1].start + hour)
+assert.equal(after[1].title, 'Standup (moved)')
+assert.equal(after[2].start, series[2].start, 'the next one is untouched')
+// Editing the same occurrence again updates that exception rather than adding another
+const again = updateOccurrenceIcs(one, series[1].recurrenceId!, asInput(after[1], { title: 'Standup (moved twice)' }), me)
+assert.equal((again.match(/RECURRENCE-ID/g) ?? []).length, 1)
+
+// All events: drag one occurrence from 09:00 to 10:00 and the series follows, in local time across DST
+const all = updateSeriesIcs(one, series[2].recurrenceId!, asInput(series[2], { start: series[2].start + hour, end: series[2].end + hour, title: 'Team standup' }), me)
+assert.match(all, /DTSTART;TZID=America\/New_York:20261026T100000/)
+assert.match(all, /RRULE:FREQ=WEEKLY;COUNT=4/, 'still repeats')
+after = occ(all)
+assert.deepEqual(after.map((e) => new Date(e.start).toISOString()), ['2026-10-26T14:00:00.000Z', '2026-11-02T15:00:00.000Z', '2026-11-09T15:00:00.000Z', '2026-11-16T15:00:00.000Z'])
+assert.equal(after[0].title, 'Team standup')
+assert.equal(after[1].title, 'Standup (moved)', 'the occurrence changed by hand keeps its own time and title, still in its place in the series')
+
+// Delete one occurrence: three left, and its changed copy is gone too
+const fewer = removeOccurrenceIcs(one, series[1].recurrenceId!)
+assert.match(fewer, /EXDATE;TZID=America\/New_York:20261102T090000/)
+after = occ(fewer)
+assert.equal(after.length, 3)
+assert.ok(!after.some((e) => e.title === 'Standup (moved)'))
+
+}
 console.log('ical tests passed')

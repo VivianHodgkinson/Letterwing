@@ -15,6 +15,7 @@ import * as store from './store'
 import * as sync from './sync'
 import * as calendar from './calendar'
 import * as pace from './pace'
+import { mailtoFromArgs, parseMailto, type MailtoRequest } from './mailto'
 import { detectProvider } from './signin'
 import { createTray, hasTray, iconPath, setTrayUnread } from './tray'
 import { checkForUpdates, getUpdateStatus, initUpdater, installUpdate, openReleasePage, showUpdateFile } from './updater'
@@ -130,7 +131,9 @@ function createWindow(): void {
   win.on('hide', () => pace.setVisible(false))
   win.on('minimize', () => pace.setVisible(false))
   win.on('focus', () => pace.wake())
+  win.webContents.on('did-start-loading', () => (rendererReady = false))
   win.on('closed', () => {
+    rendererReady = false
     win = null
     pace.setVisible(false)
   })
@@ -363,6 +366,22 @@ const api: Api = {
     const r = await dialog.showMessageBox(win, { type: 'warning', message, detail, buttons: [ok, 'Cancel'], defaultId: 1, cancelId: 1, noLink: true })
     return r.response === 0
   },
+  async choose({ message, detail, options }) {
+    if (!win) return -1
+    const r = await dialog.showMessageBox(win, { type: 'question', message, detail, buttons: [...options, 'Cancel'], defaultId: 0, cancelId: options.length, noLink: true })
+    return r.response >= options.length ? -1 : r.response
+  },
+  async takePendingMailto() {
+    rendererReady = true
+    return pendingMailto.splice(0)
+  },
+  async mailAppStatus() {
+    // A development build runs inside Electron itself, which can't sensibly become the mail app
+    return { isDefault: app.isDefaultProtocolClient('mailto'), canSet: app.isPackaged }
+  },
+  async setDefaultMailApp() {
+    return app.setAsDefaultProtocolClient('mailto') && app.isDefaultProtocolClient('mailto')
+  },
   async copyText(text) {
     clipboard.writeText(text)
   },
@@ -581,7 +600,7 @@ const api: Api = {
   },
   listEvents: (from, to) => calendar.listEvents(from, to),
   saveEvent: (input) => calendar.saveEvent(input),
-  deleteEvent: (key) => calendar.deleteEvent(key),
+  deleteEvent: (key, scope) => calendar.deleteEvent(key, scope),
   respondToEvent: (key, answer, comment) => calendar.respond(key, answer, comment),
   async respondToInvite(messageKey, answer, comment) {
     await calendar.respondToInvite(messageKey, answer, comment)
@@ -636,8 +655,34 @@ ipcMain.handle('api', async (_e, method: ApiMethod, args: unknown[]): Promise<Ip
 })
 
 if (!app.requestSingleInstanceLock()) app.quit()
-// Launching Letterwing again (menu, dock, desktop file) brings back the running copy
-app.on('second-instance', () => showWindow())
+
+/**
+ * Mail links (mailto:). Windows and Linux start the app with the link as an argument (a second copy hands
+ * it to this one); macOS sends open-url. Links that arrive before the window has loaded wait here.
+ */
+const pendingMailto: MailtoRequest[] = []
+let rendererReady = false
+function openMailto(url: string | null): void {
+  const req = url ? parseMailto(url) : null
+  if (!req) return
+  showWindow()
+  if (rendererReady) send('compose:mailto', req)
+  else pendingMailto.push(req)
+}
+// Launching Letterwing again (menu, dock, desktop file, a mail link) brings back the running copy
+app.on('second-instance', (_e, argv) => {
+  showWindow()
+  openMailto(mailtoFromArgs(argv))
+})
+app.on('open-url', (e, url) => {
+  e.preventDefault()
+  if (app.isReady()) openMailto(url)
+  else pendingMailto.push(...[parseMailto(url)].filter((r) => r !== null))
+})
+{
+  const first = parseMailto(mailtoFromArgs(process.argv) ?? '')
+  if (first) pendingMailto.push(first)
+}
 
 app.whenReady().then(() => {
   applyTheme()

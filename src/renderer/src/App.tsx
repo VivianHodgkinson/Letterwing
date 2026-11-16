@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ACTIONS, effectiveKeymap, type ActionId } from '@shared/keys'
 import type { MenuItem } from '@shared/api'
+import type { MailtoRequest } from '@shared/types'
 import { prefKey, type Account, type Folder, type FolderPref, type FolderRole, type MessageSummary, type Outgoing, type Settings, type SyncStatus } from '@shared/types'
 import { api, on } from './api'
 import { AccountDialog } from './components/AccountDialog'
@@ -17,7 +18,7 @@ import { colourMenu } from './menus'
 import { Sidebar, sortFolders } from './components/Sidebar'
 import { useKeymap } from './keymap'
 import { UpdatePill } from './components/Updates'
-import { buildReply, newMessage, type ReplyKind } from './replies'
+import { buildReply, messageFromLink, newMessage, type ReplyKind } from './replies'
 
 export interface View {
   accountId: string | null
@@ -653,6 +654,23 @@ export function App() {
     if (pick === 'read') markFolderRead(null, '*inbox', 'All inboxes')
     else if (pick === 'sync') void api.syncNow().catch(report('sync'))
   }
+
+  /** A mail link clicked anywhere (Letterwing as the default mail app): a new message, filled in */
+  const fromLink = useRef<(link: MailtoRequest) => void>(() => {})
+  fromLink.current = (link) => {
+    const a = defaultAccount()
+    if (!a) return say('Add an account first, then click the link again.', true)
+    setMode('mail')
+    void startCompose(messageFromLink(a, link))
+  }
+  const accountsLoaded = accounts.length > 0
+  useEffect(() => {
+    if (!accountsLoaded) return
+    const off = on('compose:mailto', (p) => fromLink.current(p as MailtoRequest))
+    // Links that started Letterwing, or came in while it was loading
+    void api.takePendingMailto().then((list) => list.forEach((l) => fromLink.current(l)))
+    return off
+  }, [accountsLoaded])
 
   // The menu key and Shift+F10 open the menu for the current message, under its row
   const menuKey = useRef<() => void>(() => {})
