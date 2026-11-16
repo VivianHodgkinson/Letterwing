@@ -12,7 +12,7 @@ import { dataDir } from './store'
  */
 let db: DatabaseSync
 
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 
 export function openDb(path = join(dataDir(), 'mail.db')): void {
   db = new DatabaseSync(path)
@@ -50,6 +50,11 @@ function migrate(): void {
       CREATE TABLE IF NOT EXISTS contacts (address TEXT PRIMARY KEY, name TEXT NOT NULL, score REAL NOT NULL, last INTEGER NOT NULL);
       UPDATE folders SET sync_state = NULL;
     `)
+  }
+  if (version < 4) {
+    // v4: Microsoft 365 folders could hold messages blanked by partial delta entries (no subject, sender
+    // or real date). Their sync state is JSON ({"delta":...}); clearing it reloads those folders cleanly.
+    db.exec(`UPDATE folders SET sync_state = NULL WHERE sync_state LIKE '{%'`)
   }
   if (version < 3) {
     // v3: calendars. Events are cached per occurrence for the synced window.

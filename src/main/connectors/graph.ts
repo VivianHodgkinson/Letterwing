@@ -127,21 +127,61 @@ export class GraphConnector implements MailConnector {
     return `/me/mailFolders/${folderId}/messages/delta?$select=${SELECT}&$filter=receivedDateTime+ge+${new Date(oldest).toISOString()}`
   }
 
-  /** Follow a delta chain to its delta link, collecting changes */
+  /**
+   * Follow a delta chain to its delta link, collecting changes. Graph sometimes reports a message with only
+   * the properties that changed (a new message may arrive as just its read state; reading it on a phone
+   * sends just isRead). Those are fetched in full, so a partial entry never blanks out a subject or sender.
+   */
   private async finishDelta(url: string, upserts: RemoteSummary[], deletes: string[]): Promise<{ link: string }> {
     let next: string | undefined = url
+    const partial: string[] = []
+    let link: string | undefined
     while (next) {
       const page: { value: GMessage[]; '@odata.nextLink'?: string; '@odata.deltaLink'?: string } = await this.call(next, {
         headers: { Prefer: 'odata.maxpagesize=100' }
       })
       for (const m of page.value) {
         if (m['@removed']) deletes.push(m.id)
-        else upserts.push(summarise(m))
+        else if (isComplete(m)) upserts.push(summarise(m))
+        else partial.push(m.id)
       }
-      if (page['@odata.deltaLink']) return { link: page['@odata.deltaLink'] }
+      link = page['@odata.deltaLink']
+      if (link) break
       next = page['@odata.nextLink']
     }
-    throw new Error('Microsoft Graph ended a delta query without a delta link')
+    if (!link) throw new Error('Microsoft Graph ended a delta query without a delta link')
+    const known = new Set(upserts.map((u) => u.remoteId))
+    const { found, gone } = await this.fetchSummaries([...new Set(partial)].filter((id) => !known.has(id)))
+    upserts.push(...found)
+    deletes.push(...gone)
+    return { link }
+  }
+
+  /** Full summaries for these message IDs, 20 per $batch. Messages deleted in the meantime come back in `gone`. */
+  private async fetchSummaries(ids: string[]): Promise<{ found: RemoteSummary[]; gone: string[] }> {
+    const found: RemoteSummary[] = []
+    const gone: string[] = []
+    for (let i = 0; i < ids.length; i += 20) {
+      const chunk = ids.slice(i, i + 20)
+      let pending = chunk
+      for (let attempt = 0; pending.length && attempt < 4; attempt++) {
+        const out = await this.call<{ responses: { id: string; status: number; body?: GMessage }[] }>('/$batch', {
+          method: 'POST',
+          body: JSON.stringify({ requests: pending.map((id) => ({ id, method: 'GET', url: `/me/messages/${id}?$select=${SELECT}` })) })
+        })
+        const retry: string[] = []
+        for (const r of out.responses) {
+          if (r.status === 200 && r.body) found.push(summarise(r.body))
+          else if (r.status === 404) gone.push(r.id)
+          else if (r.status === 429 || r.status >= 500) retry.push(r.id)
+          else throw new GraphError(r.status, '', `Microsoft Graph: couldn't read a new message (${r.status})`)
+        }
+        if (retry.length) await new Promise((res) => setTimeout(res, 2000))
+        pending = retry
+      }
+      if (pending.length) throw new GraphError(429, '', 'Microsoft Graph is busy; new mail will appear on the next check')
+    }
+    return { found, gone }
   }
 
   async fetchOlder(folderId: string, state: string, limit: number) {
@@ -430,6 +470,11 @@ function parseState(state: string | null): GState | null {
   } catch {
     return null // a state from an older Letterwing build: resync
   }
+}
+
+/** A delta entry carries every selected property only when it's a full record; partial ones lack the received time */
+function isComplete(m: GMessage): boolean {
+  return typeof m.receivedDateTime === 'string'
 }
 
 function summarise(m: GMessage): RemoteSummary {
