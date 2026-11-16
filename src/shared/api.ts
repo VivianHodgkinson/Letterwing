@@ -45,6 +45,10 @@ export interface Api {
   detectProvider(email: string): Promise<{ kind: AccountKind; reason: string; signInAvailable: boolean; imap?: ServerSettings; smtp?: ServerSettings }>
   /** Tests the connection (and runs OAuth sign-in when needed) before saving */
   addAccount(account: NewAccount): Promise<Account>
+  /** Stop waiting for a browser sign-in */
+  cancelSignIn(): Promise<void>
+  /** Microsoft 365: the link an organisation's admin opens to approve Letterwing once for everyone there */
+  adminConsentUrl(email: string): Promise<string | null>
   updateAccount(id: string, patch: Partial<Account>): Promise<Account>
   removeAccount(id: string): Promise<void>
 

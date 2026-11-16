@@ -10,7 +10,7 @@ import { compile } from './compose'
 import { connectorFor } from './connectors'
 import type { AttachmentData } from './connectors/types'
 import * as db from './db'
-import { signIn } from './oauth'
+import { adminConsentUrl, cancelSignIn, signIn } from './oauth'
 import * as store from './store'
 import * as sync from './sync'
 import * as calendar from './calendar'
@@ -408,6 +408,12 @@ const api: Api = {
     store.saveAccounts([...store.getAccounts(), acc])
     void sync.syncAccount(acc).then(() => calendar.syncAll())
     return acc
+  },
+  async cancelSignIn() {
+    cancelSignIn()
+  },
+  async adminConsentUrl(email) {
+    return adminConsentUrl({ kind: 'microsoft', email })
   },
   async updateAccount(id, patch) {
     const next = { ...account(id), ...patch, id }

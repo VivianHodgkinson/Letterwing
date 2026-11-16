@@ -59,6 +59,31 @@ function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>): Provi
 
 const b64url = (b: Buffer): string => b.toString('base64url')
 
+/** Stops the sign-in that's waiting for the browser, if any (the Cancel button) */
+let cancelWaiting: (() => void) | null = null
+export function cancelSignIn(): void {
+  cancelWaiting?.()
+}
+
+/**
+ * The link an organisation's admin opens to approve Letterwing for everyone there, asking for exactly
+ * the permissions Letterwing requests (so a permission missing from an earlier approval is included).
+ * Null for accounts that don't need it.
+ */
+export function adminConsentUrl(account: Pick<Account, 'kind' | 'clientId' | 'tenant' | 'email'>): string | null {
+  if (account.kind !== 'microsoft') return null
+  const p = provider(account)
+  const domain = account.email.split('@')[1]
+  if (!domain) return null
+  const url = new URL(`https://login.microsoftonline.com/${encodeURIComponent(domain)}/oauth2/v2.0/authorize`)
+  url.searchParams.set('client_id', p.clientId)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('redirect_uri', 'http://localhost/callback')
+  url.searchParams.set('scope', p.scopes.join(' '))
+  url.searchParams.set('prompt', 'admin_consent')
+  return url.toString()
+}
+
 /** Opens the browser, waits for the redirect and returns the tokens. Times out after 5 minutes. */
 export async function signIn(account: Pick<Account, 'kind' | 'clientId' | 'tenant' | 'email'>): Promise<TokenSet> {
   const p = provider(account)
@@ -79,6 +104,7 @@ export async function signIn(account: Pick<Account, 'kind' | 'clientId' | 'tenan
       res.end(`<!doctype html><title>Letterwing</title><body style="font-family:system-ui;padding:3em">
         <h2>${ok ? 'Signed in.' : 'Sign-in failed.'}</h2><p>${ok ? 'You can close this tab and return to Letterwing.' : 'Return to Letterwing for details.'}</p>`)
       clearTimeout(timer)
+      cancelWaiting = null
       server.close()
       if (ok) resolve({ code: url.searchParams.get('code')!, redirectUri })
       else reject(new Error(error ? `Sign-in failed: ${error}` : 'Sign-in failed: the response did not match this request.'))
@@ -86,8 +112,15 @@ export async function signIn(account: Pick<Account, 'kind' | 'clientId' | 'tenan
     let redirectUri = ''
     const timer = setTimeout(() => {
       server.close()
+      cancelWaiting = null
       reject(new Error('Sign-in timed out after 5 minutes.'))
     }, 5 * 60_000)
+    cancelWaiting = () => {
+      clearTimeout(timer)
+      server.close()
+      cancelWaiting = null
+      reject(new Error('Sign-in cancelled.'))
+    }
     server.listen(0, '127.0.0.1', () => {
       redirectUri = `http://${account.kind === 'microsoft' ? 'localhost' : '127.0.0.1'}:${(server.address() as AddressInfo).port}/callback`
       const url = new URL(p.authorize)

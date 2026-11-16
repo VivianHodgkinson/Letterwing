@@ -32,6 +32,9 @@ export function AccountDialog({ onClose, onAdded }: Props) {
   const [servers, setServers] = useState<{ imap: ServerSettings; smtp: ServerSettings } | null>(null)
   const [busy, setBusy] = useState<'detecting' | 'signing-in' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Microsoft 365: the organisation hasn't approved Letterwing yet; show the link for their admin */
+  const [adminLink, setAdminLink] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const domain = email.split('@')[1] ?? ''
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
@@ -75,10 +78,18 @@ export function AccountDialog({ onClose, onAdded }: Props) {
       await api.addAccount(acc)
       onAdded()
     } catch (err) {
-      setError((err as Error).message)
+      const message = (err as Error).message
+      // Microsoft's answers when an organisation must approve the app first (or the user backed out of that page)
+      if (kind === 'microsoft' && /AADSTS(65001|65004|90094|90008|900941)|admin (approval|consent)|consent_required|access_denied/i.test(message)) await showAdminHelp()
+      else if (!/cancelled/i.test(message)) setError(message)
     } finally {
       setBusy(null)
     }
+  }
+
+  async function showAdminHelp() {
+    setAdminLink(await api.adminConsentUrl(email.trim()))
+    setCopied(false)
   }
 
   const srv = servers ?? { imap: { host: `mail.${domain}`, port: 993, security: 'tls' as const }, smtp: { host: `mail.${domain}`, port: 465, security: 'tls' as const } }
@@ -206,11 +217,56 @@ export function AccountDialog({ onClose, onAdded }: Props) {
           </div>
         </details>
 
+        {busy === 'signing-in' && oauth && (
+          <div className="signin-wait">
+            <p>Finish signing in in your browser, then come back here.</p>
+            {kind === 'microsoft' && (
+              <button type="button" className="link" onClick={() => void api.cancelSignIn().then(showAdminHelp)}>
+                Seeing "Need admin approval"?
+              </button>
+            )}
+          </div>
+        )}
+        {adminLink && !busy && (
+          <div className="admin-help">
+            <h3>Your organisation needs to approve Letterwing once</h3>
+            <p>
+              Send this link to your IT administrator. They sign in with their admin account, check the permissions (mail and calendar) and click{' '}
+              <b>Accept</b>. After that, everyone at {domain} can sign in. If you're the admin, open it yourself.
+            </p>
+            <input readOnly value={adminLink} onFocus={(e) => e.currentTarget.select()} />
+            <div className="row">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  void api.copyText(adminLink)
+                  setCopied(true)
+                }}
+              >
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+              <button type="button" className="ghost" onClick={() => void api.openExternal(adminLink)}>
+                I'm the admin: open it
+              </button>
+            </div>
+            <p className="hint">
+              After approving, the browser ends on a "can't connect" page; that's expected. Then click Sign in again. Already approved and still seeing this? Your admin
+              may have approved an earlier set of permissions; this link asks for the current ones.
+            </p>
+          </div>
+        )}
         {error && <div className="error">{error}</div>}
         <div className="actions">
-          <button type="button" className="ghost" onClick={() => (busy ? undefined : setDetected(null))} disabled={!!busy}>
-            Back
-          </button>
+          {busy === 'signing-in' && oauth ? (
+            <button type="button" className="ghost" onClick={() => void api.cancelSignIn()}>
+              Cancel
+            </button>
+          ) : (
+            <button type="button" className="ghost" onClick={() => (busy ? undefined : setDetected(null))} disabled={!!busy}>
+              Back
+            </button>
+          )}
           <button className={`primary ${oauth ? `signin ${kind}` : ''}`} disabled={!!busy || unavailable}>
             {busy ? (oauth ? 'Waiting for you in the browser…' : 'Connecting…') : oauth ? `Sign in with ${PROVIDER[kind]}` : 'Connect'}
           </button>

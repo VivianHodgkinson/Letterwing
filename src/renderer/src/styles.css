@@ -480,3 +480,9 @@ body.dragging-resize, body.dragging-resize * { cursor: ns-resize !important; use
 .ev { position: relative; }
 .ev-resize { position: absolute; left: 0; right: 0; bottom: -2px; height: 7px; cursor: ns-resize; }
 .scope-choice { margin-bottom: 4px; }
+.signin-wait { background: var(--bg-2); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.signin-wait p { margin: 0; }
+.admin-help { border: 1px solid var(--warn); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.admin-help h3 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text); }
+.admin-help p { margin: 0; }
+.admin-help input { font-size: 11.5px; }
