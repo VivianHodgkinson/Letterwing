@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, Notification, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, Notification, powerMonitor, shell, type MenuItemConstructorOptions } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
@@ -14,6 +14,7 @@ import { signIn } from './oauth'
 import * as store from './store'
 import * as sync from './sync'
 import * as calendar from './calendar'
+import * as pace from './pace'
 import { detectProvider } from './signin'
 import { createTray, hasTray, iconPath, setTrayUnread } from './tray'
 import { checkForUpdates, getUpdateStatus, initUpdater, installUpdate, openReleasePage, showUpdateFile } from './updater'
@@ -123,7 +124,16 @@ function createWindow(): void {
       win?.hide()
     }
   })
-  win.on('closed', () => (win = null))
+  // New-mail checks run faster while the window is on screen (see pace.ts), and at once when it comes back
+  win.on('show', () => pace.setVisible(true))
+  win.on('restore', () => pace.setVisible(true))
+  win.on('hide', () => pace.setVisible(false))
+  win.on('minimize', () => pace.setVisible(false))
+  win.on('focus', () => pace.wake())
+  win.on('closed', () => {
+    win = null
+    pace.setVisible(false)
+  })
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
@@ -631,6 +641,9 @@ app.on('second-instance', () => showWindow())
 
 app.whenReady().then(() => {
   applyTheme()
+  // After sleep or a locked screen, look for mail straight away
+  powerMonitor.on('resume', () => pace.wake())
+  powerMonitor.on('unlock-screen', () => pace.wake())
   // Electron's default menu owns Ctrl+R (reload), Ctrl+Q (quit on Linux), Ctrl+W and others, which would
   // swallow mail shortcuts such as Ctrl+Q "mark as read". All shortcuts go through the user's keymap instead.
   // (macOS needs a menu for copy/paste, so it keeps one there.)

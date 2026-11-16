@@ -60,22 +60,29 @@ function ensureWatcher(account: Account): void {
   const stop = connector(account).watch(inbox.id, () => {
     // Servers send several events per arrival; one sync covers them all
     if (pending) clearTimeout(pending)
-    pending = setTimeout(() => void syncAccount(account, inbox.id), 1500)
+    // (IMAP sends a burst of events per arrival within milliseconds)
+    pending = setTimeout(() => void syncAccount(account, inbox.id, true), 400)
   })
   watchers.set(account.id, stop)
 }
 
-/** Sync one account (or one folder of it). Concurrent calls for the same target share the running sync. */
-export function syncAccount(account: Account, onlyFolder?: string): Promise<void> {
+/**
+ * Sync one account (or one folder of it). Concurrent calls for the same target share the running sync.
+ * `quiet` is for the frequent new-mail checks: no "syncing" status (so the UI doesn't flicker every few
+ * seconds), only errors and the recovery from one.
+ */
+export function syncAccount(account: Account, onlyFolder?: string, quiet = false): Promise<void> {
   const key = account.id + (onlyFolder ?? '')
   const existing = running.get(key)
   if (existing) return existing
   const p = (async () => {
-    status({ accountId: account.id, state: 'syncing' })
+    if (!quiet) status({ accountId: account.id, state: 'syncing' })
     try {
       const c = connector(account)
-      if (!onlyFolder || !db.getFolder(account.id, onlyFolder)) db.saveFolders(account.id, await c.listFolders())
-      notify('mail:changed', { accountId: account.id })
+      if (!onlyFolder || !db.getFolder(account.id, onlyFolder)) {
+        db.saveFolders(account.id, await c.listFolders())
+        notify('mail:changed', { accountId: account.id })
+      }
       const folders = db.listFolders(account.id).filter((f) => (onlyFolder ? f.id === onlyFolder : ALWAYS.has(f.role)))
       for (const f of folders) {
         const before = db.getFolderState(account.id, f.id)
@@ -88,7 +95,7 @@ export function syncAccount(account: Account, onlyFolder?: string): Promise<void
         if (result.upserts.length || result.deletes.length || result.flagUpdates.length || result.existing) notify('mail:changed', { accountId: account.id, folderId: f.id })
       }
       ensureWatcher(account)
-      status({ accountId: account.id, state: 'idle' })
+      if (!quiet || lastStatus.get(account.id)?.state !== 'idle') status({ accountId: account.id, state: 'idle' })
     } catch (e) {
       // A broken connection gets rebuilt on the next attempt
       await dropConnector(account.id)

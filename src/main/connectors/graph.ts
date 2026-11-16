@@ -1,4 +1,5 @@
 import type { Account, Address, FolderRole, Invite } from '@shared/types'
+import { poll } from '../pace'
 import type { AttachmentData, CompiledMessage, FolderSync, MailConnector, RemoteSummary } from './types'
 
 const GRAPH = 'https://graph.microsoft.com/v1.0'
@@ -7,7 +8,6 @@ const MAX_INLINE_MIME = 2.8 * 1024 * 1024
 /** Attachments up to 3 MB can be posted directly; bigger ones need an upload session */
 const MAX_SIMPLE_ATTACHMENT = 3 * 1024 * 1024
 const CHUNK = 3_932_160 // multiple of 320 KiB, as upload sessions require
-const POLL_MS = 60_000
 
 const SELECT = 'subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,flag,hasAttachments,internetMessageId,conversationId'
 
@@ -404,9 +404,9 @@ export class GraphConnector implements MailConnector {
   }
 
   /** Graph push needs a public webhook, which a desktop app doesn't have; a delta poll every minute is cheap instead */
+  /** Graph can't push to a desktop app, so check often: see pace.ts */
   watch(_inboxId: string, onChange: () => void): () => void {
-    const t = setInterval(onChange, POLL_MS)
-    return () => clearInterval(t)
+    return poll(onChange)
   }
 
   async close(): Promise<void> {}
