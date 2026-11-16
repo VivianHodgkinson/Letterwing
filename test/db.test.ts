@@ -85,10 +85,27 @@ db.applyOlder(A, 'INBOX', [msg('0', 'Ancient', 10, false)], '7:4:0:1')
 assert.equal(db.getFolderState(A, 'INBOX'), '7:4:0:1')
 assert.equal(ids(db.listMessages(A, 'INBOX', 20)).at(-1), '0')
 
+// Mark all as read: everything cached and the folder count go to zero, and undo restores both exactly
+db.setLocalFlags(db.listMessages(A, 'INBOX', 20).map((m) => m.key), { read: false })
+const unreadBefore = db.getFolder(A, 'INBOX')!.unread
+const was = db.markFolderReadLocal(A, 'INBOX')
+assert.equal(db.getFolder(A, 'INBOX')!.unread, 0)
+assert.ok(db.listMessages(A, 'INBOX', 20).every((m) => !m.unread))
+db.undoMarkFolderRead(A, 'INBOX', was)
+assert.equal(db.getFolder(A, 'INBOX')!.unread, unreadBefore)
+assert.ok(db.listMessages(A, 'INBOX', 20).every((m) => m.unread))
+
 // UIDVALIDITY reset wipes the folder first
 sync('INBOX', { upserts: [msg('9', 'Fresh', 3000)], reset: true })
 assert.deepEqual(ids(db.listMessages(A, 'INBOX', 10)), ['9'])
 assert.equal(db.getCachedBody(k1), null)
+
+// Emptying a folder drops its cache and counts, and nothing else
+sync('Trash', { upserts: [msg('t1', 'Binned', 100)] })
+db.clearFolder(A, 'Trash')
+assert.equal(db.listMessages(A, 'Trash', 10).length, 0)
+assert.equal(db.getFolder(A, 'Trash')!.total, 0)
+assert.ok(db.listMessages(A, 'INBOX', 10).length > 0)
 
 // folder removed on server -> its messages go too
 db.saveFolders(A, [{ id: 'INBOX', name: 'Inbox', parentId: null, role: 'inbox', unread: 0, total: 1 }])

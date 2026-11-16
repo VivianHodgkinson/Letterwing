@@ -183,6 +183,32 @@ try {
   assert.equal(parsedReply.uid, 'meet-1@acme.test')
   assert.match(calText, /PARTSTAT=ACCEPTED/)
 
+  // Mark all as read covers every message on the server, cached or not
+  await c.setFlags('INBOX', [inviteUid], { read: false })
+  await c.markFolderRead('INBOX')
+  assert.equal((await c.listFolders()).find((f) => f.id === 'INBOX')?.unread, 0, 'inbox has nothing unread')
+
+  // Folders: create (top level and nested), rename, refuse a bad name, delete
+  await c.createFolder(null, 'Projects')
+  await c.createFolder('Projects', 'Acme')
+  let names = (await c.listFolders()).map((f) => f.id)
+  assert.ok(names.includes('Projects') && names.includes('Projects/Acme'), names.join(','))
+  await assert.rejects(c.createFolder(null, 'a/b'), /can't contain/)
+  await assert.rejects(c.createFolder(null, '   '), /name/)
+  await c.renameFolder('Projects/Acme', 'Acme Ltd')
+  names = (await c.listFolders()).map((f) => f.id)
+  assert.ok(names.includes('Projects/Acme Ltd') && !names.includes('Projects/Acme'), names.join(','))
+  await c.deleteFolder('Projects/Acme Ltd')
+  assert.ok(!(await c.listFolders()).some((f) => f.id === 'Projects/Acme Ltd'))
+
+  // Emptying Trash removes everything in it; emptying an empty folder is fine
+  await c.move('INBOX', [inviteUid], 'Trash')
+  assert.ok(((await c.listFolders()).find((f) => f.id === 'Trash')?.total ?? 0) > 0)
+  await c.emptyFolder('Trash')
+  assert.equal((await c.listFolders()).find((f) => f.id === 'Trash')?.total, 0)
+  await c.emptyFolder('Trash')
+  await c.markFolderRead('Trash')
+
   // a wrong password is a readable error, not a hang
   const bad = new ImapConnector(account, async () => ({ pass: 'nope' }))
   await assert.rejects(bad.verify())

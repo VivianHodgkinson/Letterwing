@@ -331,6 +331,33 @@ export function setLocalFlags(keys: string[], flags: { read?: boolean; flagged?:
   })
 }
 
+/** Everything in a folder is now read (after the server confirmed it). Returns what changed, to undo on failure. */
+export function markFolderReadLocal(accountId: string, folderId: string): { keys: string[]; unread: number } {
+  return tx(() => {
+    const keys = (db.prepare('SELECT key FROM messages WHERE account_id = ? AND folder_id = ? AND unread = 1').all(accountId, folderId) as Row[]).map((r) => r.key as string)
+    const unread = (getFolder(accountId, folderId)?.unread ?? 0) as number
+    db.prepare('UPDATE messages SET unread = 0 WHERE account_id = ? AND folder_id = ? AND unread = 1').run(accountId, folderId)
+    db.prepare('UPDATE folders SET unread = 0 WHERE account_id = ? AND id = ?').run(accountId, folderId)
+    return { keys, unread }
+  })
+}
+
+export function undoMarkFolderRead(accountId: string, folderId: string, was: { keys: string[]; unread: number }): void {
+  tx(() => {
+    const m = db.prepare('UPDATE messages SET unread = 1 WHERE key = ?')
+    for (const k of was.keys) m.run(k)
+    db.prepare('UPDATE folders SET unread = ? WHERE account_id = ? AND id = ?').run(was.unread, accountId, folderId)
+  })
+}
+
+/** Drop the cached copy of a folder's messages (after emptying it on the server) */
+export function clearFolder(accountId: string, folderId: string): void {
+  tx(() => {
+    clearFolderMessages(accountId, folderId)
+    db.prepare('UPDATE folders SET unread = 0, total = 0 WHERE account_id = ? AND id = ?').run(accountId, folderId)
+  })
+}
+
 /** Take messages out of the cache straight away (moved or deleted). Returns them so a failed server call can put them back. */
 export function removeLocal(keys: string[]): { message: MessageSummary; body: MessageBody | null }[] {
   return tx(() => {

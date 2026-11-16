@@ -246,6 +246,52 @@ export class ImapConnector implements MailConnector {
     })
   }
 
+  async markFolderRead(folderId: string): Promise<void> {
+    await this.inFolder(folderId, async (c) => {
+      if (c.mailbox && c.mailbox.exists > 0) await c.messageFlagsAdd('1:*', ['\\Seen'])
+    })
+  }
+
+  async emptyFolder(folderId: string): Promise<void> {
+    await this.inFolder(folderId, async (c) => {
+      if (c.mailbox && c.mailbox.exists > 0) await c.messageDelete('1:*')
+    })
+  }
+
+  /** The server's hierarchy separator ("/" or "."), from the folder itself or any folder */
+  private async delimiter(c: ImapFlow, near: string | null): Promise<{ delimiter: string; box?: ListResponse }> {
+    const boxes = await c.list()
+    const box = near ? boxes.find((b) => b.path === near) : undefined
+    return { delimiter: box?.delimiter ?? boxes.find((b) => b.delimiter)?.delimiter ?? '/', box }
+  }
+
+  private static checkName(name: string, delimiter: string): string {
+    const n = name.trim()
+    if (!n) throw new Error('Give the folder a name.')
+    if (n.includes(delimiter)) throw new Error(`Folder names can't contain "${delimiter}" on this server.`)
+    return n
+  }
+
+  async createFolder(parentId: string | null, name: string): Promise<void> {
+    const c = await this.conn()
+    const { delimiter } = await this.delimiter(c, parentId)
+    const n = ImapConnector.checkName(name, delimiter)
+    await c.mailboxCreate(parentId ? parentId + delimiter + n : n)
+  }
+
+  async renameFolder(folderId: string, name: string): Promise<void> {
+    const c = await this.conn()
+    const { delimiter, box } = await this.delimiter(c, folderId)
+    if (!box) throw new Error('That folder no longer exists on the server.')
+    const n = ImapConnector.checkName(name, delimiter)
+    await c.mailboxRename(folderId, box.parentPath ? box.parentPath + delimiter + n : n)
+  }
+
+  async deleteFolder(folderId: string): Promise<void> {
+    const c = await this.conn()
+    await c.mailboxDelete(folderId)
+  }
+
   async send(message: CompiledMessage, sentFolderId: string | null): Promise<void> {
     const s = this.account.smtp
     if (!s) throw new Error('No SMTP server configured for this account')

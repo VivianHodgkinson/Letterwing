@@ -202,7 +202,20 @@ function MessageCard(props: {
       {files.length > 0 && (
         <div className="attachments">
           {files.map((a) => (
-            <span key={a.id} className="chip attachment" title={`${a.contentType} · click to open`}>
+            <span
+              key={a.id}
+              className="chip attachment"
+              title={`${a.contentType} · click to open`}
+              onContextMenu={async (e) => {
+                e.preventDefault()
+                const pick = await api.showMenu([
+                  { id: 'open', label: 'Open' },
+                  { id: 'save', label: 'Save as…' }
+                ])
+                const run = pick === 'open' ? api.openAttachment(m.key, a.id) : pick === 'save' ? api.saveAttachment(m.key, a.id) : null
+                void run?.catch((err: Error) => setError(err.message))
+              }}
+            >
               <button className="chip-open" onClick={() => void api.openAttachment(m.key, a.id).catch((e: Error) => setError(e.message))}>
                 📎 {a.filename} <small>{bytes(a.size)}</small>
               </button>

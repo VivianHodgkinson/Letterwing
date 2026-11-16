@@ -261,19 +261,91 @@ export class GraphConnector implements MailConnector {
     return { filename: meta.name, contentType: meta.contentType, content: Buffer.from(await res.arrayBuffer()) }
   }
 
+  /**
+   * Run many small requests through Graph's $batch endpoint, 20 at a time. Items that get
+   * throttled are retried after the wait Graph asks for; any other failure is thrown.
+   */
+  private async batch(requests: { method: string; url: string; body?: unknown }[]): Promise<void> {
+    type Res = { id: string; status: number; headers?: Record<string, string>; body?: { error?: { message?: string } } }
+    let pending = requests.map((r, i) => ({ ...r, id: String(i) }))
+    for (let attempt = 0; pending.length; attempt++) {
+      const retry: typeof pending = []
+      let wait = 0
+      for (let i = 0; i < pending.length; i += 20) {
+        const chunk = pending.slice(i, i + 20)
+        const out = await this.call<{ responses: Res[] }>('/$batch', {
+          method: 'POST',
+          body: JSON.stringify({
+            requests: chunk.map((r) => ({ id: r.id, method: r.method, url: r.url, ...(r.body ? { body: r.body, headers: { 'Content-Type': 'application/json' } } : {}) }))
+          })
+        })
+        for (const res of out.responses) {
+          if (res.status < 300 || res.status === 404) continue // 404: already gone, which is what we wanted for deletes and moves
+          const req = chunk.find((r) => r.id === res.id)!
+          if ((res.status === 429 || res.status === 503 || res.status === 504) && attempt < 5) {
+            retry.push(req)
+            wait = Math.max(wait, Number(res.headers?.['Retry-After'] ?? res.headers?.['retry-after'] ?? 2))
+            continue
+          }
+          throw new GraphError(res.status, '', `Microsoft Graph: ${res.body?.error?.message ?? 'request failed'} (${res.status})`)
+        }
+      }
+      if (retry.length) await new Promise((r) => setTimeout(r, Math.min(wait, 30) * 1000))
+      pending = retry
+    }
+  }
+
   async setFlags(_folderId: string, remoteIds: string[], flags: { read?: boolean; flagged?: boolean }): Promise<void> {
     const patch: Record<string, unknown> = {}
     if (flags.read !== undefined) patch.isRead = flags.read
     if (flags.flagged !== undefined) patch.flag = { flagStatus: flags.flagged ? 'flagged' : 'notFlagged' }
-    await Promise.all(remoteIds.map((id) => this.call(`/me/messages/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })))
+    await this.batch(remoteIds.map((id) => ({ method: 'PATCH', url: `/me/messages/${id}`, body: patch })))
   }
 
   async move(_folderId: string, remoteIds: string[], toFolderId: string): Promise<void> {
-    await Promise.all(remoteIds.map((id) => this.call(`/me/messages/${id}/move`, { method: 'POST', body: JSON.stringify({ destinationId: toFolderId }) })))
+    await this.batch(remoteIds.map((id) => ({ method: 'POST', url: `/me/messages/${id}/move`, body: { destinationId: toFolderId } })))
   }
 
   async remove(_folderId: string, remoteIds: string[]): Promise<void> {
-    await Promise.all(remoteIds.map((id) => this.call(`/me/messages/${id}`, { method: 'DELETE' })))
+    await this.batch(remoteIds.map((id) => ({ method: 'DELETE', url: `/me/messages/${id}` })))
+  }
+
+  /** IDs of every message in a folder matching a filter, following all pages */
+  private async allIds(folderId: string, filter?: string): Promise<string[]> {
+    const ids: string[] = []
+    let url: string | undefined = `/me/mailFolders/${folderId}/messages?$select=id&$top=500${filter ? `&$filter=${encodeURIComponent(filter)}` : ''}`
+    while (url) {
+      const page: { value: { id: string }[]; '@odata.nextLink'?: string } = await this.call(url)
+      ids.push(...page.value.map((m) => m.id))
+      url = page['@odata.nextLink']
+    }
+    return ids
+  }
+
+  async markFolderRead(folderId: string): Promise<void> {
+    await this.setFlags(folderId, await this.allIds(folderId, 'isRead eq false'), { read: true })
+  }
+
+  async emptyFolder(folderId: string): Promise<void> {
+    // permanentDelete skips Recoverable Items, so an emptied Deleted Items really is empty
+    await this.batch((await this.allIds(folderId)).map((id) => ({ method: 'POST', url: `/me/messages/${id}/permanentDelete` })))
+  }
+
+  async createFolder(parentId: string | null, name: string): Promise<void> {
+    const n = name.trim()
+    if (!n) throw new Error('Give the folder a name.')
+    await this.call(parentId ? `/me/mailFolders/${parentId}/childFolders` : '/me/mailFolders', { method: 'POST', body: JSON.stringify({ displayName: n }) })
+  }
+
+  async renameFolder(folderId: string, name: string): Promise<void> {
+    const n = name.trim()
+    if (!n) throw new Error('Give the folder a name.')
+    await this.call(`/me/mailFolders/${folderId}`, { method: 'PATCH', body: JSON.stringify({ displayName: n }) })
+  }
+
+  async deleteFolder(folderId: string): Promise<void> {
+    // Like the web client: the folder goes to Deleted Items with its contents
+    await this.call(`/me/mailFolders/${folderId}`, { method: 'DELETE' })
   }
 
   /** Create a message in Drafts from MIME, uploading big attachments separately. Returns its ID. */

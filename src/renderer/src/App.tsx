@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ACTIONS, effectiveKeymap, type ActionId } from '@shared/keys'
-import type { Account, Folder, MessageSummary, Outgoing, Settings, SyncStatus } from '@shared/types'
+import type { MenuItem } from '@shared/api'
+import type { Account, Folder, FolderRole, MessageSummary, Outgoing, Settings, SyncStatus } from '@shared/types'
 import { api, on } from './api'
 import { AccountDialog } from './components/AccountDialog'
 import { CalendarView, type CalendarHandle } from './components/calendar/CalendarView'
@@ -9,7 +10,8 @@ import { MessageList } from './components/MessageList'
 import { MoveDialog } from './components/MoveDialog'
 import { Reader } from './components/Reader'
 import { SettingsDialog } from './components/SettingsDialog'
-import { Sidebar } from './components/Sidebar'
+import { PromptDialog } from './components/PromptDialog'
+import { Sidebar, sortFolders } from './components/Sidebar'
 import { useKeymap } from './keymap'
 import { UpdatePill } from './components/Updates'
 import { buildReply, newMessage, type ReplyKind } from './replies'
@@ -37,6 +39,8 @@ export function App() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<Record<string, SyncStatus>>({})
   const [dialog, setDialog] = useState<'account' | 'settings' | 'move' | null>(null)
+  const [settingsTab, setSettingsTab] = useState<'accounts' | undefined>(undefined)
+  const [prompt, setPrompt] = useState<{ title: string; label: string; initial?: string; ok: string; onSubmit(v: string): Promise<void> } | null>(null)
   const [compose, setCompose] = useState<{ initial: Outgoing; id: number } | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [imagesRequest, setImagesRequest] = useState(0)
@@ -226,8 +230,7 @@ export function App() {
   const selection = (): string[] => (selected.size ? [...selected] : primary ? [primary] : [])
 
   /** After a delete/archive/move, select the next message */
-  const removeAndAdvance = async (run: (keys: string[]) => Promise<void>, verb: string) => {
-    const keys = selection()
+  const removeAndAdvance = async (run: (keys: string[]) => Promise<void>, verb: string, keys = selection()) => {
     if (!keys.length) return
     const idx = Math.max(...keys.map((k) => messages.findIndex((m) => m.key === k)))
     const next =
@@ -246,7 +249,13 @@ export function App() {
   }
 
   const archive = () => void removeAndAdvance((k) => api.archiveMessages(k), 'archive')
-  const remove = () => void removeAndAdvance((k) => api.deleteMessages(k), 'delete')
+  /** Delete moves to Trash; in Trash itself it is permanent, so ask first */
+  const remove = async (keys = selection()) => {
+    if (!keys.length) return
+    const inTrash = messages.filter((m) => keys.includes(m.key)).some((m) => folderOf(m)?.role === 'trash')
+    if (inTrash && !(await api.confirm({ message: `Permanently delete ${keys.length === 1 ? 'this message' : `${keys.length} messages`}?`, detail: "This can't be undone.", ok: 'Delete' }))) return
+    await removeAndAdvance((k) => api.deleteMessages(k), 'delete', keys)
+  }
   const moveTo = (folderId: string) => void removeAndAdvance((k) => api.moveMessages(k, folderId), 'move')
 
   const openMove = () => {
@@ -287,6 +296,258 @@ export function App() {
   }
 
   const keymap = useMemo(() => (settings ? effectiveKeymap(settings.keymapPreset, settings.keybindings) : null), [settings])
+  const sc = (id: ActionId): string | undefined => keymap?.[id]?.[0]
+  const SEP: MenuItem = { type: 'separator' }
+  const report = (verb: string) => (e: Error) => say(`Couldn't ${verb}: ${e.message}`, true)
+
+  /** Right-click on a message: acts on the selection if the message is part of it, otherwise on that message alone */
+  const messageMenu = async (m: MessageSummary, at?: { x: number; y: number }) => {
+    const keys = selected.has(m.key) ? [...selected] : [m.key]
+    if (!selected.has(m.key)) {
+      // Select it without marking it read, as a click would
+      anchor.current = m.key
+      setSelected(new Set([m.key]))
+      setPrimary(m.key)
+    }
+    const rows = messages.filter((x) => keys.includes(x.key))
+    if (!rows.length) return
+    const single = rows.length === 1 ? rows[0] : null
+    const accountId = new Set(rows.map((r) => r.accountId)).size === 1 ? rows[0].accountId : null
+    const accFolders = accountId ? (folders[accountId] ?? []) : []
+    const roleOf = (r: MessageSummary): FolderRole | undefined => folderOf(r)?.role
+    const everyAccountHas = (role: FolderRole) => rows.every((r) => folders[r.accountId]?.some((f) => f.role === role))
+    const isUnread = (r: MessageSummary) => (r.threadUnread !== undefined ? r.threadUnread > 0 : r.unread)
+    const allFlagged = rows.every((r) => r.flagged)
+    const inJunk = rows.every((r) => roleOf(r) === 'junk')
+    const inTrash = rows.some((r) => roleOf(r) === 'trash')
+    const sameFolder = rows.every((r) => r.folderId === rows[0].folderId) ? rows[0].folderId : null
+    const inbox = accFolders.find((f) => f.role === 'inbox')
+
+    const items: MenuItem[] = [
+      ...(single && roleOf(single) === 'drafts'
+        ? [{ id: 'edit', label: 'Edit draft', shortcut: sc('openMessage') }]
+        : single
+          ? [
+              { id: 'reply', label: 'Reply', shortcut: sc('reply') },
+              { id: 'replyAll', label: 'Reply all', shortcut: sc('replyAll') },
+              { id: 'forward', label: 'Forward', shortcut: sc('forward') }
+            ]
+          : []),
+      SEP,
+      { id: 'read', label: 'Mark as read', enabled: rows.some(isUnread), shortcut: sc('markRead') },
+      { id: 'unread', label: 'Mark as unread', enabled: rows.some((r) => !isUnread(r)), shortcut: sc('markUnread') },
+      { id: allFlagged ? 'unflag' : 'flag', label: allFlagged ? 'Clear flag' : 'Flag', shortcut: sc('toggleFlag') },
+      SEP,
+      accountId
+        ? {
+            label: 'Move to',
+            submenu: [
+              ...sortFolders(accFolders)
+                .filter(({ folder }) => folder.id !== sameFolder)
+                .map(({ folder, depth }) => ({ id: `move:${folder.id}`, label: `${'    '.repeat(depth)}${folder.name}` })),
+              SEP,
+              { id: 'moveOther', label: 'Choose folder…', shortcut: sc('moveToFolder') }
+            ]
+          }
+        : { label: 'Move to (select messages from one account)', enabled: false },
+      { id: 'archive', label: 'Archive', enabled: everyAccountHas('archive') && rows.every((r) => roleOf(r) !== 'archive'), shortcut: sc('archive') },
+      inJunk ? { id: 'notJunk', label: 'Not junk (move to Inbox)', enabled: !!(accountId && inbox) } : { id: 'junk', label: 'Move to Junk', enabled: everyAccountHas('junk') },
+      { id: 'delete', label: inTrash ? 'Delete permanently…' : 'Delete', shortcut: sc('delete') },
+      SEP,
+      ...(single
+        ? [
+            { id: 'copyFrom', label: 'Copy sender address', enabled: !!single.from?.address },
+            { id: 'copySubject', label: 'Copy subject' }
+          ]
+        : []),
+      { id: 'selectAll', label: 'Select all', shortcut: sc('selectAll') }
+    ]
+    const pick = await api.showMenu(items, at)
+    if (!pick) return
+    const all = () => expand(keys)
+    if (pick.startsWith('move:')) return void removeAndAdvance((k) => api.moveMessages(k, pick.slice(5)), 'move', keys)
+    switch (pick) {
+      case 'edit':
+        return void open(single)
+      case 'reply':
+      case 'replyAll':
+      case 'forward':
+        return void reply(pick, single)
+      case 'read':
+      case 'unread':
+        return void all()
+          .then((k) => api.setRead(k, pick === 'read'))
+          .catch(report(`mark as ${pick}`))
+      case 'flag':
+      case 'unflag':
+        return void api.setFlagged(keys, pick === 'flag').catch(report('change the flag'))
+      case 'moveOther':
+        return openMove()
+      case 'archive':
+        return void removeAndAdvance((k) => api.archiveMessages(k), 'archive', keys)
+      case 'junk':
+        return void removeAndAdvance((k) => api.junkMessages(k), 'move to Junk', keys)
+      case 'notJunk':
+        return void removeAndAdvance((k) => api.moveMessages(k, inbox!.id), 'move to Inbox', keys)
+      case 'delete':
+        return void remove(keys)
+      case 'copyFrom':
+        return void api.copyText(single!.from!.address)
+      case 'copySubject':
+        return void api.copyText(single!.subject)
+      case 'selectAll':
+        return setSelected(new Set(messages.map((x) => x.key)))
+    }
+  }
+
+  const leaveIfShowing = (accountId: string, folderId?: string) => {
+    if (view.accountId === accountId && (!folderId || view.folderId === folderId)) {
+      setView(UNIFIED)
+      setPrimary(null)
+      setSelected(new Set())
+    }
+  }
+
+  const markFolderRead = (accountId: string | null, folderId: string, name: string) =>
+    void api
+      .markFolderRead(accountId, folderId)
+      .then(() => say(`${name}: all marked as read.`))
+      .catch(report('mark everything as read'))
+
+  const newFolderPrompt = (a: Account, parent: Folder | null) =>
+    setPrompt({
+      title: parent ? `New folder in ${parent.name}` : `New folder in ${a.email}`,
+      label: 'Folder name',
+      ok: 'Create',
+      onSubmit: async (name) => {
+        await api.createFolder(a.id, parent?.id ?? null, name)
+        setPrompt(null)
+        say(`Created ${name}.`)
+      }
+    })
+
+  const folderMenu = async (e: React.MouseEvent, a: Account, f: Folder) => {
+    e.preventDefault()
+    const special = f.role !== 'other'
+    const emptyable = f.role === 'trash' || f.role === 'junk'
+    const pick = await api.showMenu([
+      { id: 'read', label: 'Mark all as read' },
+      { id: 'sync', label: 'Sync now', shortcut: sc('syncAll') },
+      SEP,
+      ...(emptyable ? [{ id: 'empty', label: `Empty ${f.name}…`, enabled: f.total > 0 || messages.some((m) => m.folderId === f.id) }, SEP] : []),
+      { id: 'new', label: 'New subfolder…' },
+      { id: 'rename', label: 'Rename…', enabled: !special },
+      { id: 'delete', label: 'Delete folder…', enabled: !special }
+    ])
+    switch (pick) {
+      case 'read':
+        return markFolderRead(a.id, f.id, f.name)
+      case 'sync':
+        return void api.syncNow(a.id).catch(report('sync'))
+      case 'empty':
+        if (!(await api.confirm({ message: `Permanently delete everything in ${f.name}?`, detail: `${a.email}\nThis can't be undone.`, ok: `Empty ${f.name}` }))) return
+        return void api
+          .emptyFolder(a.id, f.id)
+          .then(() => say(`${f.name} emptied.`))
+          .catch(report(`empty ${f.name}`))
+      case 'new':
+        return newFolderPrompt(a, f)
+      case 'rename':
+        return setPrompt({
+          title: `Rename ${f.name}`,
+          label: 'New name',
+          initial: f.name,
+          ok: 'Rename',
+          onSubmit: async (name) => {
+            // On IMAP servers a renamed folder gets a new ID, so step out of it first
+            leaveIfShowing(a.id, f.id)
+            await api.renameFolder(a.id, f.id, name)
+            setPrompt(null)
+          }
+        })
+      case 'delete': {
+        const detail =
+          a.kind === 'microsoft'
+            ? 'The folder and everything in it go to Deleted Items.'
+            : "The folder, its subfolders and every message in them are deleted from the server. This can't be undone."
+        if (!(await api.confirm({ message: `Delete the folder ${f.name}?`, detail, ok: 'Delete folder' }))) return
+        leaveIfShowing(a.id, f.id)
+        return void api
+          .deleteFolder(a.id, f.id)
+          .then(() => say(`Deleted ${f.name}.`))
+          .catch(report(`delete ${f.name}`))
+      }
+    }
+  }
+
+  const accountMenu = async (e: React.MouseEvent, a: Account) => {
+    e.preventDefault()
+    const inbox = folders[a.id]?.find((f) => f.role === 'inbox')
+    const pick = await api.showMenu([
+      { id: 'sync', label: 'Sync now' },
+      { id: 'read', label: 'Mark inbox as read', enabled: !!inbox },
+      { id: 'new', label: 'New folder…' },
+      SEP,
+      { id: 'settings', label: 'Account settings…' },
+      { id: 'copy', label: 'Copy address' },
+      SEP,
+      { id: 'remove', label: 'Remove account…' }
+    ])
+    switch (pick) {
+      case 'sync':
+        return void api.syncNow(a.id).catch(report('sync'))
+      case 'read':
+        return markFolderRead(a.id, inbox!.id, `${a.email} inbox`)
+      case 'new':
+        return newFolderPrompt(a, null)
+      case 'settings':
+        setSettingsTab('accounts')
+        return setDialog('settings')
+      case 'copy':
+        return void api.copyText(a.email)
+      case 'remove':
+        if (!(await api.confirm({ message: `Remove ${a.email} from Letterwing?`, detail: 'Your mail stays on the server. The copy on this computer and the saved sign-in are deleted.', ok: 'Remove account' })))
+          return
+        leaveIfShowing(a.id)
+        try {
+          await api.removeAccount(a.id)
+          await loadAccounts()
+          await loadMessages()
+        } catch (err) {
+          report('remove the account')(err as Error)
+        }
+    }
+  }
+
+  const unifiedMenu = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    const pick = await api.showMenu([
+      { id: 'read', label: 'Mark all inboxes as read' },
+      { id: 'sync', label: 'Sync all accounts', shortcut: sc('syncAll') }
+    ])
+    if (pick === 'read') markFolderRead(null, '*inbox', 'All inboxes')
+    else if (pick === 'sync') void api.syncNow().catch(report('sync'))
+  }
+
+  // The menu key and Shift+F10 open the menu for the current message, under its row
+  const menuKey = useRef<() => void>(() => {})
+  menuKey.current = () => {
+    if (mode !== 'mail' || dialog || prompt || !current) return
+    const row = document.querySelector(`.msg[data-key="${CSS.escape(current.key)}"]`)
+    const r = row?.getBoundingClientRect()
+    void messageMenu(current, r ? { x: r.left + 48, y: r.bottom } : undefined)
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return
+      const t = e.target as HTMLElement
+      if (t.closest('input, textarea, select, [contenteditable="true"]')) return
+      e.preventDefault()
+      menuKey.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const move = (to: (i: number) => number) => {
     const i = messages.findIndex((m) => m.key === primary)
     const m = messages[Math.max(0, Math.min(messages.length - 1, to(i)))]
@@ -335,7 +596,7 @@ export function App() {
     reply: () => void reply('reply'),
     replyAll: () => void reply('replyAll'),
     forward: () => void reply('forward'),
-    delete: remove,
+    delete: () => void remove(),
     archive,
     moveToFolder: openMove,
     loadImages: () => setImagesRequest((n) => n + 1),
@@ -370,7 +631,7 @@ export function App() {
       ([id]) => !scopeOf.get(id as ActionId) || scopeOf.get(id as ActionId) === mode
     )
   )
-  useKeymap(keymap ?? effectiveKeymap('classic', {}), handlers, !!keymap && dialog === null && !calEditing)
+  useKeymap(keymap ?? effectiveKeymap('classic', {}), handlers, !!keymap && dialog === null && !prompt && !calEditing)
 
   if (!settings) return null
   const syncing = Object.values(status).some((s) => s.state === 'syncing')
@@ -464,6 +725,9 @@ export function App() {
             setSelected(new Set())
           }}
           onAddAccount={() => setDialog('account')}
+          onFolderMenu={(e, a, f) => void folderMenu(e, a, f)}
+          onAccountMenu={(e, a) => void accountMenu(e, a)}
+          onUnifiedMenu={(e) => void unifiedMenu(e)}
           onDropMessages={(dropped, accountId, folderId) => {
             const same = messages.filter((m) => dropped.includes(m.key) && m.accountId === accountId).map((m) => m.key)
             if (same.length < dropped.length) say('Messages can only be moved between folders of the same account.', true)
@@ -493,6 +757,10 @@ export function App() {
               onSelect={select}
               onOpen={(m) => void open(m)}
               onFlag={(m) => void api.setFlagged([m.key], !m.flagged).catch(fail)}
+              onMenu={(e, m) => {
+                e.preventDefault()
+                void messageMenu(m)
+              }}
               onEndReached={() => void loadMore()}
             />
             {settings.readingPane !== 'off' &&
@@ -507,7 +775,7 @@ export function App() {
                   actions={{
                     reply: (kind, m) => void reply(kind, m),
                     archive,
-                    remove,
+                    remove: () => void remove(),
                     move: openMove,
                     toggleFlag: () => current && void api.setFlagged(selection(), !current.flagged).catch(fail),
                     toggleRead: () =>
@@ -547,8 +815,10 @@ export function App() {
           }}
         />
       )}
+      {prompt && <PromptDialog {...prompt} onClose={() => setPrompt(null)} />}
       {dialog === 'settings' && (
         <SettingsDialog
+          initialTab={settingsTab}
           settings={settings}
           accounts={accounts}
           onChange={async (patch) => setSettings(await api.saveSettings(patch))}
@@ -562,7 +832,10 @@ export function App() {
             await loadAccounts()
             await loadMessages()
           }}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null)
+            setSettingsTab(undefined)
+          }}
         />
       )}
     </div>

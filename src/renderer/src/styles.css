@@ -357,3 +357,4 @@ kbd { font: 11.5px ui-monospace, monospace; background: var(--bg-3); border: 1px
 
 /* Account heading shows the email address: keep its case */
 .account-head .aname { text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+.prompt-dialog { width: 400px; }

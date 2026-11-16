@@ -1,5 +1,18 @@
 import type { Account, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
 
+/** One entry of a right-click menu. The menu is drawn by the OS; the renderer gets back the id that was clicked. */
+export interface MenuItem {
+  id?: string
+  label?: string
+  type?: 'separator'
+  enabled?: boolean
+  /** Shown as a tick */
+  checked?: boolean
+  /** A keybinding as written in the keymap ("Ctrl+R"); shown next to the label when the OS can draw it */
+  shortcut?: string
+  submenu?: MenuItem[]
+}
+
 /** Paging position in a message list: the last row shown */
 export interface Cursor {
   date: number
@@ -14,6 +27,11 @@ export interface Api {
   getSettings(): Promise<Settings>
   saveSettings(patch: Partial<Settings>): Promise<Settings>
   openExternal(url: string): Promise<void>
+  /** Show a native right-click menu at the mouse (or at x/y in window coordinates). Resolves with the chosen id, or null if dismissed. */
+  showMenu(items: MenuItem[], at?: { x: number; y: number }): Promise<string | null>
+  /** Native yes/no question. Resolves true when the user picks `ok`. */
+  confirm(question: { message: string; detail?: string; ok: string }): Promise<boolean>
+  copyText(text: string): Promise<void>
 
   listAccounts(): Promise<Account[]>
   /** Who hosts this address, and whether this build can sign in there */
@@ -38,6 +56,16 @@ export interface Api {
   /** Move to Trash; messages already in Trash are deleted for good */
   deleteMessages(keys: string[]): Promise<void>
   archiveMessages(keys: string[]): Promise<void>
+  /** Move to the account's Junk folder */
+  junkMessages(keys: string[]): Promise<void>
+  /** Mark every message in a folder read on the server, not only the cached ones. folderId '*inbox' means every account's inbox. */
+  markFolderRead(accountId: string | null, folderId: string): Promise<void>
+  /** Permanently delete everything in a folder (for Trash and Junk) */
+  emptyFolder(accountId: string, folderId: string): Promise<void>
+  createFolder(accountId: string, parentId: string | null, name: string): Promise<void>
+  renameFolder(accountId: string, folderId: string, name: string): Promise<void>
+  /** Deletes the folder and everything in it */
+  deleteFolder(accountId: string, folderId: string): Promise<void>
   openAttachment(key: string, attachmentId: string): Promise<void>
   saveAttachment(key: string, attachmentId: string): Promise<boolean>
   syncNow(accountId?: string): Promise<void>

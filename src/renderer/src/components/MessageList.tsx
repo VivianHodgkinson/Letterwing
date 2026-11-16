@@ -17,10 +17,11 @@ interface Props {
   onSelect(m: MessageSummary, mode: 'single' | 'toggle' | 'range'): void
   onOpen(m: MessageSummary): void
   onFlag(m: MessageSummary): void
+  onMenu(e: React.MouseEvent, m: MessageSummary): void
   onEndReached(): void
 }
 
-export function MessageList({ messages, primary, selected, accounts, showAccount, loadingMore, onSelect, onOpen, onFlag, onEndReached }: Props) {
+export function MessageList({ messages, primary, selected, accounts, showAccount, loadingMore, onSelect, onOpen, onFlag, onMenu, onEndReached }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
 
   // Keep the keyboard selection in view
@@ -63,6 +64,8 @@ export function MessageList({ messages, primary, selected, accounts, showAccount
                 }}
                 onClick={(e) => onSelect(m, e.shiftKey ? 'range' : e.ctrlKey || e.metaKey ? 'toggle' : 'single')}
                 onDoubleClick={() => onOpen(m)}
+                onContextMenu={(e) => onMenu(e, m)}
+                data-key={m.key}
               >
                 <div className="avatar" style={{ ['--h' as string]: hue(m.from?.address ?? '') }}>
                   {initials(m.from)}

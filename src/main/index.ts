@@ -1,10 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, Notification, shell, type MenuItemConstructorOptions } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { detectMimeType } from 'nodemailer/lib/mime-funcs'
-import type { Api, ApiMethod, IpcResult } from '@shared/api'
+import type { Api, ApiMethod, IpcResult, MenuItem } from '@shared/api'
 import type { Account, MessageBody, MessageSummary, Outgoing, OutgoingAttachment } from '@shared/types'
 import { compile } from './compose'
 import { connectorFor } from './connectors'
@@ -59,6 +59,48 @@ function createWindow(): void {
       e.preventDefault()
       if (/^(https?|mailto):/.test(url)) shell.openExternal(url)
     }
+  })
+  // Text, links and spelling. Fires only where the app didn't show its own menu (it cancels the event when it does),
+  // so this covers text boxes, the message editor and the inside of emails.
+  win.webContents.on('context-menu', (_e, p) => {
+    const items: MenuItemConstructorOptions[] = []
+    const wc = win!.webContents
+    if (p.isEditable && p.misspelledWord) {
+      for (const w of p.dictionarySuggestions.slice(0, 5)) items.push({ label: w, click: () => wc.replaceMisspelling(w) })
+      if (!p.dictionarySuggestions.length) items.push({ label: 'No suggestions', enabled: false })
+      items.push({ label: 'Add to dictionary', click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) }, { type: 'separator' })
+    }
+    const link = /^(https?|mailto):/i.test(p.linkURL) ? p.linkURL : ''
+    if (link.toLowerCase().startsWith('mailto:')) {
+      const address = decodeURIComponent(link.slice(7).split('?')[0])
+      items.push({ label: 'Copy email address', click: () => clipboard.writeText(address) }, { type: 'separator' })
+    } else if (link) {
+      items.push(
+        { label: 'Open link in browser', click: () => void shell.openExternal(link) },
+        { label: 'Copy link address', click: () => clipboard.writeText(link) },
+        { type: 'separator' }
+      )
+    }
+    if (p.isEditable) {
+      const f = p.editFlags
+      items.push(
+        { label: 'Undo', role: 'undo', enabled: f.canUndo },
+        { label: 'Redo', role: 'redo', enabled: f.canRedo },
+        { type: 'separator' },
+        { label: 'Cut', role: 'cut', enabled: f.canCut },
+        { label: 'Copy', role: 'copy', enabled: f.canCopy },
+        { label: 'Paste', role: 'paste', enabled: f.canPaste },
+        { label: 'Paste as plain text', role: 'pasteAndMatchStyle', enabled: f.canPaste },
+        { type: 'separator' },
+        { label: 'Select all', role: 'selectAll' }
+      )
+    } else if (p.selectionText.trim()) {
+      const text = p.selectionText
+      items.push({ label: 'Copy', click: () => clipboard.writeText(text) })
+    }
+    if (p.mediaType === 'image' && !link) items.push({ label: 'Copy image', click: () => wc.copyImageAt(p.x, p.y) })
+    while (items.length && items[items.length - 1].type === 'separator') items.pop()
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: win! })
   })
   win.webContents.on('before-input-event', (_e, input) => {
     if (input.type !== 'keyDown') return
@@ -206,6 +248,63 @@ async function dropServerDraft(out: Outgoing): Promise<void> {
   send('mail:changed', {})
 }
 
+/** Our keybinding text ("Ctrl+Shift+R") as an Electron accelerator, when it is one. Sequences ("G I") can't be shown. */
+function accelerator(binding: string | undefined): string | undefined {
+  if (!binding || /\s/.test(binding)) return undefined
+  const parts = binding.split('+')
+  if (binding.endsWith('++')) parts.splice(-2, 2, 'Plus')
+  const key = parts[parts.length - 1]
+  const named = /^(F([1-9]|1\d|2[0-4])|Enter|Delete|Insert|Backspace|Escape|Up|Down|Left|Right|Home|End|PageUp|PageDown|Tab|Space|Plus)$/
+  if (!(key.length === 1 && /[A-Z0-9,./;'[\]\\=`#*!@$%^&()_~-]/.test(key)) && !named.test(key)) return undefined
+  return parts.map((p) => (p === 'Meta' ? 'Super' : p)).join('+')
+}
+
+/** Right-click menus are native, so they sit above the mail frame, never run off-screen and follow the OS look */
+function showMenu(items: MenuItem[], at?: { x: number; y: number }): Promise<string | null> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (id: string | null) => {
+      if (done) return
+      done = true
+      resolve(id)
+    }
+    const build = (list: MenuItem[]): MenuItemConstructorOptions[] =>
+      list.map((m) =>
+        m.type === 'separator'
+          ? { type: 'separator' }
+          : {
+              label: m.label ?? '',
+              enabled: m.enabled !== false,
+              ...(m.checked !== undefined ? { type: 'checkbox' as const, checked: m.checked } : {}),
+              ...(accelerator(m.shortcut) ? { accelerator: accelerator(m.shortcut), registerAccelerator: false } : {}),
+              ...(m.submenu ? { submenu: build(m.submenu) } : { click: () => finish(m.id ?? null) })
+            }
+      )
+    // Drop leading, trailing and doubled separators left by items that didn't apply
+    const tidy = (list: MenuItem[]): MenuItem[] =>
+      list
+        .map((m) => (m.submenu ? { ...m, submenu: tidy(m.submenu) } : m))
+        .filter((m, i, a) => m.type !== 'separator' || (i > 0 && i < a.length - 1 && a[i - 1].type !== 'separator'))
+    const template = build(tidy(items))
+    if (!win || !template.length) return finish(null)
+    // On some platforms the close callback runs before the click handler; give the click a moment to land
+    Menu.buildFromTemplate(template).popup({ window: win, ...(at ? { x: Math.round(at.x), y: Math.round(at.y) } : {}), callback: () => setTimeout(() => finish(null), 150) })
+  })
+}
+
+/** Re-read an account's folder list after creating, renaming or deleting a folder */
+async function refreshFolders(acc: Account): Promise<void> {
+  db.saveFolders(acc.id, await sync.connector(acc).listFolders())
+  send('mail:changed', { accountId: acc.id })
+}
+
+function editableFolder(accountId: string, folderId: string) {
+  const f = db.getFolder(accountId, folderId)
+  if (!f) throw new Error('That folder no longer exists.')
+  if (f.role !== 'other') throw new Error(`${f.name} is a special folder and can't be renamed or deleted.`)
+  return f
+}
+
 const api: Api = {
   async getSettings() {
     return store.getSettings()
@@ -218,6 +317,15 @@ const api: Api = {
   },
   async openExternal(url) {
     if (/^(https?|mailto):/.test(url)) await shell.openExternal(url)
+  },
+  showMenu: (items, at) => showMenu(items, at),
+  async confirm({ message, detail, ok }) {
+    if (!win) return false
+    const r = await dialog.showMessageBox(win, { type: 'warning', message, detail, buttons: [ok, 'Cancel'], defaultId: 1, cancelId: 1, noLink: true })
+    return r.response === 0
+  },
+  async copyText(text) {
+    clipboard.writeText(text)
   },
 
   detectProvider: (email) => detectProvider(email),
@@ -305,6 +413,61 @@ const api: Api = {
       if (!archive) throw new Error(`${account(accountId).name} has no Archive folder.`)
       return archive.id
     })
+  },
+  async junkMessages(keys) {
+    await relocate(keys, (accountId, from) => {
+      const junk = db.folderByRole(accountId, 'junk')
+      if (!junk) throw new Error(`${account(accountId).name} has no Junk folder.`)
+      return junk.id === from ? from : junk.id
+    })
+  },
+  async markFolderRead(accountId, folderId) {
+    const targets =
+      folderId === '*inbox'
+        ? store.getAccounts().flatMap((a) => {
+            const inbox = db.folderByRole(a.id, 'inbox')
+            return inbox ? [[a.id, inbox.id] as const] : []
+          })
+        : [[accountId!, folderId] as const]
+    const errors: string[] = []
+    await Promise.all(
+      targets.map(async ([a, f]) => {
+        // Show it straight away; put it back if the server says no
+        const was = db.markFolderReadLocal(a, f)
+        send('mail:changed', {})
+        try {
+          await sync.connector(account(a)).markFolderRead(f)
+        } catch (e) {
+          db.undoMarkFolderRead(a, f, was)
+          send('mail:changed', {})
+          errors.push(`${account(a).name}: ${(e as Error).message}`)
+        }
+      })
+    )
+    if (errors.length) throw new Error(errors.join(' · '))
+  },
+  async emptyFolder(accountId, folderId) {
+    const acc = account(accountId)
+    await sync.connector(acc).emptyFolder(folderId)
+    db.clearFolder(accountId, folderId)
+    send('mail:changed', { accountId })
+  },
+  async createFolder(accountId, parentId, name) {
+    const acc = account(accountId)
+    await sync.connector(acc).createFolder(parentId, name)
+    await refreshFolders(acc)
+  },
+  async renameFolder(accountId, folderId, name) {
+    editableFolder(accountId, folderId)
+    const acc = account(accountId)
+    await sync.connector(acc).renameFolder(folderId, name)
+    await refreshFolders(acc)
+  },
+  async deleteFolder(accountId, folderId) {
+    editableFolder(accountId, folderId)
+    const acc = account(accountId)
+    await sync.connector(acc).deleteFolder(folderId)
+    await refreshFolders(acc)
   },
   async openAttachment(key, attachmentId) {
     const a = await fetchAttachment(key, attachmentId)

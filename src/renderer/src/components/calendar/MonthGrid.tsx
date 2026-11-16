@@ -30,6 +30,8 @@ export function MonthGrid({ days, month, events, colorOf, selected, onSelect, on
         return (
           <div
             key={d}
+            data-allday={d}
+            data-month-cell
             className={`mg-cell ${outside ? 'outside' : ''} ${sameDay(d, today) ? 'today' : ''}`}
             onDoubleClick={(e) => e.target === e.currentTarget && onCreate(d + 9 * 3_600_000, d + 9.5 * 3_600_000, false)}
           >

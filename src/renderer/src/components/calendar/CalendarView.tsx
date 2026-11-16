@@ -5,7 +5,7 @@ import { addDays, addMonths, rangeLabel, sameDay, startOfDay, startOfMonth, star
 import { EventEditor } from './EventEditor'
 import { EventPanel } from './EventPanel'
 import { MonthGrid } from './MonthGrid'
-import { TimeGrid } from './TimeGrid'
+import { HOUR, TimeGrid } from './TimeGrid'
 
 export interface CalendarHandle {
   setView(v: View): void
@@ -101,6 +101,118 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
     }
   }
 
+  const editEvent = (ev: CalendarEvent) =>
+    setEditing({
+      input: {
+        key: ev.key,
+        accountId: ev.accountId,
+        calendarId: ev.calendarId,
+        title: ev.title,
+        start: ev.start,
+        end: ev.end,
+        allDay: ev.allDay,
+        location: ev.location,
+        description: ev.description,
+        attendees: ev.attendees.filter((a) => a.address !== ev.organizer?.address).map(({ name, address }) => ({ name, address })),
+        repeat: 'none',
+        online: !!ev.joinUrl
+      },
+      occurrence: ev.recurring
+    })
+
+  const isInvited = (ev: CalendarEvent) => !ev.isOrganizer && ev.attendees.length > 0
+
+  const deleteEvent = async (ev: CalendarEvent) => {
+    const invited = isInvited(ev)
+    const what = ev.recurring && !ev.seriesId ? 'every occurrence of this repeating event' : 'this event'
+    const ok = await api.confirm(
+      invited
+        ? { message: `Decline "${ev.title}"?`, detail: 'The organizer is told you are not coming.', ok: 'Decline' }
+        : { message: `Delete ${what}?`, detail: ev.attendees.length ? 'Attendees will be told it is cancelled.' : undefined, ok: 'Delete' }
+    )
+    if (!ok) return
+    if (selected === ev.key) setSelected(null)
+    await run(api.deleteEvent(ev.key), invited ? 'Declined.' : 'Deleted.')
+  }
+
+  const fmtTime = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+
+  /** Right-click on an event, or on empty space in the grid */
+  const onMenu = async (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement
+    const chip = target.closest<HTMLElement>('[data-event]')
+    const col = target.closest<HTMLElement>('[data-day]')
+    const allDay = target.closest<HTMLElement>('[data-allday]')
+    if (!chip && !col && !allDay) return
+    e.preventDefault()
+
+    if (chip) {
+      const ev = events.find((x) => x.key === chip.dataset.event)
+      if (!ev) return
+      setSelected(ev.key)
+      const cal = calById.get(calKey(ev))
+      const writable = !!cal && !cal.readOnly
+      const invited = isInvited(ev)
+      const answer = (a: string) => ev.myStatus === a
+      const pick = await api.showMenu([
+        { id: 'open', label: 'Open' },
+        ...(writable ? [{ id: 'edit', label: invited ? 'Edit (only on your calendar)…' : 'Edit…' }] : []),
+        ...(ev.joinUrl ? [{ id: 'join', label: 'Join online meeting' }] : []),
+        { type: 'separator' as const },
+        ...(invited && writable && !ev.cancelled
+          ? [
+              { id: 'accepted', label: 'Accept', checked: answer('accepted') },
+              { id: 'tentative', label: 'Tentative', checked: answer('tentative') },
+              { id: 'declined', label: 'Decline', checked: answer('declined') },
+              { type: 'separator' as const }
+            ]
+          : []),
+        { id: 'copy', label: 'Copy details' },
+        ...(writable ? [{ type: 'separator' as const }, { id: 'delete', label: invited ? 'Decline and remove…' : 'Delete…' }] : [])
+      ])
+      switch (pick) {
+        case 'edit':
+          return editEvent(ev)
+        case 'join':
+          return void api.openExternal(ev.joinUrl!)
+        case 'accepted':
+        case 'tentative':
+        case 'declined':
+          return void run(api.respondToEvent(ev.key, pick), 'Response sent.')
+        case 'copy': {
+          const when = ev.allDay ? new Date(ev.start).toLocaleDateString() : `${new Date(ev.start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} – ${fmtTime(ev.end)}`
+          return void api.copyText([ev.title, when, ev.location, ev.joinUrl].filter(Boolean).join('\n'))
+        }
+        case 'delete':
+          return void deleteEvent(ev)
+      }
+      return
+    }
+
+    // Empty space: a new event at the half hour under the mouse, or all day
+    let start: number
+    let end: number
+    let whole: boolean
+    if (col) {
+      const day = Number(col.dataset.day)
+      const y = e.clientY - col.getBoundingClientRect().top
+      start = day + Math.max(0, Math.min(47, Math.floor((y / HOUR) * 2))) * 30 * 60_000
+      end = start + 30 * 60_000
+      whole = false
+    } else {
+      const day = Number(allDay!.dataset.allday)
+      const month = allDay!.hasAttribute('data-month-cell')
+      start = month ? day + settings.workDayStart * 3_600_000 : day
+      end = month ? start + 30 * 60_000 : addDays(day, 1)
+      whole = !month
+    }
+    const label = whole ? 'New all-day event' : `New event at ${fmtTime(start)}`
+    const pick = await api.showMenu([{ id: 'new', label: `${label} on ${new Date(start).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}` }, ...(whole ? [] : [{ id: 'allday', label: 'New all-day event' }]), { type: 'separator' }, { id: 'today', label: 'Go to today' }])
+    if (pick === 'new') create(start, end, whole)
+    else if (pick === 'allday') create(startOfDay(start), addDays(startOfDay(start), 1), true)
+    else if (pick === 'today') setAnchor(startOfDay(Date.now()))
+  }
+
   const grouped = useMemo(() => {
     const g = new Map<string, CalendarInfo[]>()
     for (const c of calendars) g.set(c.accountId, [...(g.get(c.accountId) ?? []), c])
@@ -165,7 +277,7 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
             ))}
           </div>
         </div>
-        <div className="cal-body">
+        <div className="cal-body" onContextMenu={(e) => void onMenu(e)}>
           {view === 'month' ? (
             <MonthGrid
               days={days}
@@ -203,32 +315,8 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
               accountName={accountById[current.accountId]?.name}
               onClose={() => setSelected(null)}
               onOpenUrl={(u) => void api.openExternal(u)}
-              onEdit={() =>
-                setEditing({
-                  input: {
-                    key: current.key,
-                    accountId: current.accountId,
-                    calendarId: current.calendarId,
-                    title: current.title,
-                    start: current.start,
-                    end: current.end,
-                    allDay: current.allDay,
-                    location: current.location,
-                    description: current.description,
-                    attendees: current.attendees.filter((a) => a.address !== current.organizer?.address).map(({ name, address }) => ({ name, address })),
-                    repeat: 'none',
-                    online: !!current.joinUrl
-                  },
-                  occurrence: current.recurring
-                })
-              }
-              onDelete={() => {
-                const invited = !current.isOrganizer && current.attendees.length > 0
-                const what = current.recurring && !current.seriesId ? 'every occurrence of this repeating event' : 'this event'
-                if (!confirm(invited ? `Decline "${current.title}" and tell the organizer?` : `Delete ${what}?${current.attendees.length ? ' Attendees will be told it is cancelled.' : ''}`)) return
-                setSelected(null)
-                void run(api.deleteEvent(current.key), invited ? 'Declined.' : 'Deleted.')
-              }}
+              onEdit={() => editEvent(current)}
+              onDelete={() => void deleteEvent(current)}
               onRespond={(a) => void run(api.respondToEvent(current.key, a), 'Response sent.')}
             />
           )}

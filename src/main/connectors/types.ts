@@ -23,6 +23,13 @@ export interface MailConnector {
   move(folderId: string, remoteIds: string[], toFolderId: string): Promise<void>
   /** Permanently delete. "Delete" in the UI is a move to Trash; this is for messages already there. */
   remove(folderId: string, remoteIds: string[]): Promise<void>
+  /** Mark every message in the folder read, including ones never downloaded */
+  markFolderRead(folderId: string): Promise<void>
+  /** Permanently delete every message in the folder */
+  emptyFolder(folderId: string): Promise<void>
+  createFolder(parentId: string | null, name: string): Promise<void>
+  renameFolder(folderId: string, name: string): Promise<void>
+  deleteFolder(folderId: string): Promise<void>
   /** Send, and keep a copy in Sent when the server doesn't do that itself */
   send(message: CompiledMessage, sentFolderId: string | null): Promise<void>
   /** Store a draft on the server, replacing the previous copy. Returns where it went, if the server says. */

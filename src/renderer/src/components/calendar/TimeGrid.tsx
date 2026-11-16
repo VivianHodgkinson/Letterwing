@@ -3,7 +3,7 @@ import type { CalendarEvent } from '@shared/types'
 import { addDays, sameDay, time } from './dates'
 import { layout } from './layout'
 
-const HOUR = 48 // px per hour
+export const HOUR = 48 // px per hour
 
 interface Props {
   days: number[]
@@ -48,7 +48,7 @@ export function TimeGrid({ days, events, colorOf, selected, workStart, workEnd, 
       <div className="tg-allday">
         <div className="tg-gutter">all day</div>
         {days.map((d) => (
-          <div key={d} className="tg-allday-cell" onDoubleClick={(e) => e.target === e.currentTarget && onCreate(d, addDays(d, 1), true)}>
+          <div key={d} className="tg-allday-cell" data-allday={d} onDoubleClick={(e) => e.target === e.currentTarget && onCreate(d, addDays(d, 1), true)}>
             {allDay
               .filter((e) => e.start < addDays(d, 1) && e.end > d)
               .map((e) => (
@@ -76,6 +76,7 @@ export function TimeGrid({ days, events, colorOf, selected, workStart, workEnd, 
             return (
               <div
                 key={d}
+                data-day={d}
                 className="tg-col"
                 onDoubleClick={(ev) => {
                   if (ev.target !== ev.currentTarget) return
@@ -113,6 +114,7 @@ export function EventChip(props: { e: CalendarEvent; color: string; selected: bo
   return (
     <div
       className={cls.filter(Boolean).join(' ')}
+      data-event={e.key}
       style={{ ['--ev' as string]: color }}
       title={`${e.title}\n${e.allDay ? 'All day' : `${time(e.start)} – ${time(e.end)}`}${e.location ? `\n${e.location}` : ''}`}
       onClick={(ev) => {

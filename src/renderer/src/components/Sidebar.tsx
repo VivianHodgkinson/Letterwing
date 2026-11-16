@@ -15,16 +15,20 @@ interface Props {
   onAddAccount(): void
   /** Messages dropped onto a folder */
   onDropMessages(keys: string[], accountId: string, folderId: string): void
+  /** Right-click (or the menu key) on a folder, an account heading or All inboxes */
+  onFolderMenu(e: React.MouseEvent, account: Account, folder: Folder): void
+  onAccountMenu(e: React.MouseEvent, account: Account): void
+  onUnifiedMenu(e: React.MouseEvent): void
 }
 
-export function Sidebar({ accounts, folders, status, view, onView, onAddAccount, onDropMessages }: Props) {
+export function Sidebar({ accounts, folders, status, view, onView, onAddAccount, onDropMessages, onFolderMenu, onAccountMenu, onUnifiedMenu }: Props) {
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const totalUnread = accounts.reduce((n, a) => n + (folders[a.id]?.find((f) => f.role === 'inbox')?.unread ?? 0), 0)
 
   return (
     <nav className="sidebar">
-      <button className={`folder unified ${view.folderId === '*inbox' ? 'active' : ''}`} onClick={() => onView({ accountId: null, folderId: '*inbox' })}>
+      <button className={`folder unified ${view.folderId === '*inbox' ? 'active' : ''}`} onClick={() => onView({ accountId: null, folderId: '*inbox' })} onContextMenu={onUnifiedMenu}>
         <span className="ficon">✉</span>
         <span className="fname">All inboxes</span>
         {totalUnread > 0 && <span className="count">{totalUnread}</span>}
@@ -35,7 +39,7 @@ export function Sidebar({ accounts, folders, status, view, onView, onAddAccount,
         const st = status[a.id]
         return (
           <section key={a.id} className="account" style={{ ['--acct' as string]: a.color }}>
-            <button className="account-head" onClick={() => setCollapsed((c) => ({ ...c, [a.id]: !c[a.id] }))}>
+            <button className="account-head" onClick={() => setCollapsed((c) => ({ ...c, [a.id]: !c[a.id] }))} onContextMenu={(e) => onAccountMenu(e, a)}>
               <span className="badge">{a.label}</span>
               {/* The address tells accounts apart (three Gmail accounts would all be called "Gmail") */}
               <span className="aname" title={a.name}>
@@ -50,6 +54,7 @@ export function Sidebar({ accounts, folders, status, view, onView, onAddAccount,
                   className={`folder ${view.accountId === a.id && view.folderId === f.id ? 'active' : ''} ${dropTarget === a.id + f.id ? 'drop' : ''}`}
                   style={{ paddingLeft: 14 + depth * 14 }}
                   onClick={() => onView({ accountId: a.id, folderId: f.id })}
+                  onContextMenu={(e) => onFolderMenu(e, a, f)}
                   onDragOver={(e) => {
                     if (!e.dataTransfer.types.includes(DRAG_TYPE)) return
                     e.preventDefault()
@@ -80,7 +85,7 @@ export function Sidebar({ accounts, folders, status, view, onView, onAddAccount,
 }
 
 /** Special folders first in a fixed order, then the rest as a tree */
-function sortFolders(folders: Folder[]): { folder: Folder; depth: number }[] {
+export function sortFolders(folders: Folder[]): { folder: Folder; depth: number }[] {
   const special = ORDER.flatMap((r) => folders.filter((f) => f.role === r))
   const rest = folders.filter((f) => f.role === 'other')
   const children = new Map<string | null, Folder[]>()

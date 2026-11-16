@@ -10,6 +10,8 @@ interface Props {
   onAccountChange(id: string, patch: Partial<Account>): Promise<void>
   onRemoveAccount(id: string): Promise<void>
   onClose(): void
+  /** Open on this tab instead of General */
+  initialTab?: 'general' | 'theme' | 'keyboard' | 'accounts' | 'calendars'
 }
 
 /** Variables exposed in the theme editor. Anything in styles.css :root can also be set via the raw JSON box. */
@@ -47,10 +49,10 @@ const PRESETS: Record<string, Record<string, string>> = {
   Ember: { '--accent': '#ff8a3d', '--bg-0': '#120d0a', '--bg-1': '#1a1310', '--bg-2': '#2a1e18', '--unread': '#ff8a3d' }
 }
 
-export function SettingsDialog({ settings, accounts, onChange, onAccountChange, onRemoveAccount, onClose }: Props) {
+export function SettingsDialog({ settings, accounts, onChange, onAccountChange, onRemoveAccount, onClose, initialTab }: Props) {
   const [raw, setRaw] = useState(JSON.stringify(settings.themeVars, null, 2))
   const [rawError, setRawError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'general' | 'theme' | 'keyboard' | 'accounts' | 'calendars'>('general')
+  const [tab, setTab] = useState<'general' | 'theme' | 'keyboard' | 'accounts' | 'calendars'>(initialTab ?? 'general')
   const css = getComputedStyle(document.documentElement)
 
   const setVar = (k: string, v: string) => {
