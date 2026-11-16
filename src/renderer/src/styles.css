@@ -23,6 +23,24 @@
   --font-size: 13.5px;
   color-scheme: dark;
 }
+/* Light mode: Electron reports the theme picked in Letterwing (or the system's) as prefers-color-scheme */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-0: #ffffff;
+    --bg-1: #f5f6f8;
+    --bg-2: #eaecf0;
+    --bg-3: #dfe2e8;
+    --border: #d9dde5;
+    --text: #1b1f27;
+    --text-dim: #4d5566;
+    --text-faint: #848c9c;
+    --accent: #3b5fd9;
+    --danger: #d23c3c;
+    --warn: #b7791f;
+    --ok: #1e9e57;
+    color-scheme: light;
+  }
+}
 :root[data-density='compact'] { --row-pad: 5px; --font-size: 13px; }
 :root[data-density='spacious'] { --row-pad: 15px; --font-size: 14.5px; }
 
@@ -158,6 +176,13 @@ small { color: var(--text-faint); }
 .row { display: flex; gap: 8px; align-items: flex-end; }
 .row > input { flex: 1; }
 .grow { flex: 1; }
+/* Round icon buttons at the right of the top bar */
+.icon-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 1px solid transparent; background: none; color: var(--text-dim); font-size: 17px; line-height: 1; }
+.icon-btn:hover { background: var(--bg-2); color: var(--text); border-color: var(--border); }
+.icon-btn span { display: inline-grid; place-items: center; }
+.icon-btn.busy span { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.topbar-right { display: flex; align-items: center; gap: 2px; margin-left: auto; }
 .port { width: 80px; flex: 0 0 80px !important; }
 .badge-input { width: 70px; text-transform: uppercase; }
 .tabs { display: flex; gap: 4px; background: var(--bg-0); padding: 3px; border-radius: var(--radius); }

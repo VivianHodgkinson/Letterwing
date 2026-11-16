@@ -34,6 +34,12 @@ let win: BrowserWindow | null = null
 /** True once the user really quits (tray menu, Cmd+Q), so closing the window can hide it instead */
 let quitting = false
 
+/** Light or dark everywhere: the page (via prefers-color-scheme), native menus and dialogs */
+function applyTheme(): void {
+  nativeTheme.themeSource = store.getSettings().theme
+  win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#0b0d12' : '#ffffff')
+}
+
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1480,
@@ -332,6 +338,7 @@ const api: Api = {
   },
   async saveSettings(patch) {
     const s = store.saveSettings(patch)
+    if (patch.theme) applyTheme()
     if (patch.syncInterval) sync.schedule(s.syncInterval)
     if (patch.icsSubscriptions) void calendar.syncAll()
     return s
@@ -622,6 +629,7 @@ if (!app.requestSingleInstanceLock()) app.quit()
 app.on('second-instance', () => showWindow())
 
 app.whenReady().then(() => {
+  applyTheme()
   // Electron's default menu owns Ctrl+R (reload), Ctrl+Q (quit on Linux), Ctrl+W and others, which would
   // swallow mail shortcuts such as Ctrl+Q "mark as read". All shortcuts go through the user's keymap instead.
   // (macOS needs a menu for copy/paste, so it keeps one there.)

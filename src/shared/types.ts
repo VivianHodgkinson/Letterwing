@@ -237,8 +237,12 @@ export type Density = 'compact' | 'comfortable' | 'spacious'
 export interface Settings {
   readingPane: ReadingPane
   density: Density
+  /** Light or dark, or follow the operating system */
+  theme: 'system' | 'light' | 'dark'
   /** CSS variable overrides, e.g. { "--accent": "#ff8800" }. The whole look is driven by these. */
   themeVars: Record<string, string>
+  /** The same for light mode (themeVars is dark mode's) */
+  themeVarsLight: Record<string, string>
   /** Group messages into conversations */
   conversations: boolean
   /** Desktop notification for new mail in an inbox */

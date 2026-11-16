@@ -11,6 +11,7 @@ import { MoveDialog } from './components/MoveDialog'
 import { Reader } from './components/Reader'
 import { SettingsDialog } from './components/SettingsDialog'
 import { ColorDialog } from './components/ColorDialog'
+import { GearIcon, MoonIcon, SunIcon, SyncIcon } from './components/Icons'
 import { PromptDialog } from './components/PromptDialog'
 import { colourMenu } from './menus'
 import { Sidebar, sortFolders } from './components/Sidebar'
@@ -55,6 +56,16 @@ export function App() {
   const anchor = useRef<string | null>(null)
   const shown = useRef(0)
   shown.current = messages.length
+
+  // Whether the app is showing dark colours right now (the setting, or the system's when set to follow it)
+  const [dark, setDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches)
+  useEffect(() => {
+    const mq = matchMedia('(prefers-color-scheme: dark)')
+    const update = () => setDark(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [settings?.theme])
 
   const say = useCallback((text: string, error = false) => setNotice({ text, error }), [])
   const fail = useCallback((e: Error) => say(e.message, true), [say])
@@ -169,12 +180,12 @@ export function App() {
     const root = document.documentElement
     root.dataset.density = settings.density
     root.dataset.pane = settings.readingPane
-    const applied = Object.entries(settings.themeVars)
+    const applied = Object.entries(dark ? settings.themeVars : settings.themeVarsLight)
     for (const [k, v] of applied) root.style.setProperty(k, v)
     return () => {
       for (const [k] of applied) root.style.removeProperty(k)
     }
-  }, [settings])
+  }, [settings, dark])
 
   const accountById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
   const current = useMemo(() => messages.find((m) => m.key === primary) ?? null, [messages, primary])
@@ -737,14 +748,32 @@ export function App() {
             <input ref={searchRef} className="search" placeholder="Search all mail" value={query} onChange={(e) => setQuery(e.target.value)} />
           </>
         )}
-        {mode === 'calendar' && <span className="grow" />}
-        <UpdatePill />
-        <button className="ghost" title="Send / receive" onClick={() => void api.syncNow().catch(fail)}>
-          {syncing ? 'Syncing…' : 'Sync'}
-        </button>
-        <button className="ghost" onClick={() => setDialog('settings')}>
-          Settings
-        </button>
+        <div className="topbar-right">
+          <UpdatePill />
+          <button
+            className={`icon-btn ${syncing ? 'busy' : ''}`}
+            title={`${syncing ? 'Syncing…' : 'Send / receive'}${sc('syncAll') ? ` (${sc('syncAll')})` : ''}`}
+            aria-label="Send / receive"
+            onClick={() => void api.syncNow().catch(fail)}
+          >
+            <span>
+              <SyncIcon />
+            </span>
+          </button>
+          <button
+            className="icon-btn"
+            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            onClick={async () => setSettings(await api.saveSettings({ theme: dark ? 'light' : 'dark' }))}
+          >
+            <span>{dark ? <SunIcon /> : <MoonIcon />}</span>
+          </button>
+          <button className="icon-btn" title="Settings" aria-label="Settings" onClick={() => setDialog('settings')}>
+            <span>
+              <GearIcon />
+            </span>
+          </button>
+        </div>
       </header>
 
       {(notice || errors.length > 0) && (

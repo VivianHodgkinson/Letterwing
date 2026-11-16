@@ -27,8 +27,10 @@ function writeJson(file: string, value: unknown): void {
 
 export const DEFAULT_SETTINGS: Settings = {
   readingPane: 'right',
+  theme: 'system',
   density: 'comfortable',
   themeVars: {},
+  themeVarsLight: {},
   loadRemoteImages: false,
   conversations: true,
   icsSubscriptions: [],

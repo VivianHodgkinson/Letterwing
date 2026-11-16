@@ -25,40 +25,47 @@ const THEME_VARS: [string, string][] = [
   ['--unread', 'Unread marker']
 ]
 
-const PRESETS: Record<string, Record<string, string>> = {
-  Ink: {},
-  Daylight: {
-    '--bg-0': '#f4f5f7',
-    '--bg-1': '#ffffff',
-    '--bg-2': '#e8ebf0',
-    '--bg-3': '#dde1e8',
-    '--text': '#1a1d24',
-    '--text-dim': '#5b6270',
-    '--text-faint': '#8a91a0',
-    '--border': '#dfe3ea'
+/** Starting points for each mode; "Standard" is the built-in palette */
+const PRESETS: Record<'dark' | 'light', Record<string, Record<string, string>>> = {
+  dark: {
+    Standard: {},
+    Verdigris: {
+      '--accent': '#3ddc84',
+      '--bg-0': '#080c0a',
+      '--bg-1': '#0d1411',
+      '--bg-2': '#18241f',
+      '--bg-3': '#1f2e27',
+      '--border': '#1f2c26',
+      '--unread': '#3ddc84'
+    }
   },
-  Verdigris: {
-    '--accent': '#3ddc84',
-    '--bg-0': '#080c0a',
-    '--bg-1': '#0d1411',
-    '--bg-2': '#18241f',
-    '--bg-3': '#1f2e27',
-    '--border': '#1f2c26',
-    '--unread': '#3ddc84'
-  },
-  Ember: { '--accent': '#ff8a3d', '--bg-0': '#120d0a', '--bg-1': '#1a1310', '--bg-2': '#2a1e18', '--unread': '#ff8a3d' }
+  light: {
+    Standard: {},
+    Verdigris: {
+      '--accent': '#1e9e57',
+      '--unread': '#1e9e57',
+      '--bg-1': '#f3f8f5',
+      '--bg-2': '#e5eee8',
+      '--bg-3': '#d8e5dc',
+      '--border': '#d3e0d7'
+    }
+  }
 }
 
 export function SettingsDialog({ settings, accounts, onChange, onAccountChange, onRemoveAccount, onClose, initialTab }: Props) {
-  const [raw, setRaw] = useState(JSON.stringify(settings.themeVars, null, 2))
+  // Custom colours belong to a mode: the Theme tab edits the set for the mode showing now
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches
+  const varsKey = dark ? 'themeVars' : 'themeVarsLight'
+  const themeVars = settings[varsKey]
+  const [raw, setRaw] = useState(JSON.stringify(themeVars, null, 2))
   const [rawError, setRawError] = useState<string | null>(null)
   const [tab, setTab] = useState<'general' | 'theme' | 'keyboard' | 'accounts' | 'calendars'>(initialTab ?? 'general')
   const css = getComputedStyle(document.documentElement)
 
   const setVar = (k: string, v: string) => {
-    const next = { ...settings.themeVars, [k]: v }
+    const next = { ...themeVars, [k]: v }
     setRaw(JSON.stringify(next, null, 2))
-    void onChange({ themeVars: next })
+    void onChange({ [varsKey]: next })
   }
 
   return (
@@ -85,6 +92,14 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
           <>
             <h3>Layout</h3>
             <div className="row">
+              <label>
+                Appearance
+                <select value={settings.theme} onChange={(e) => void onChange({ theme: e.target.value as Settings['theme'] })}>
+                  <option value="system">Match system</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </label>
               <label>
                 Reading pane
                 <select value={settings.readingPane} onChange={(e) => void onChange({ readingPane: e.target.value as Settings['readingPane'] })}>
@@ -134,15 +149,18 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
 
         {tab === 'theme' && (
           <>
+            <p className="hint">
+              These colours are for {dark ? 'dark' : 'light'} mode. Switch modes with the {dark ? '☀' : '☾'} button at the top right to change the other set.
+            </p>
             <h3>Presets</h3>
             <div className="presets">
-              {Object.entries(PRESETS).map(([name, vars]) => (
+              {Object.entries(PRESETS[dark ? 'dark' : 'light']).map(([name, vars]) => (
                 <button
                   key={name}
                   className="ghost"
                   onClick={() => {
                     setRaw(JSON.stringify(vars, null, 2))
-                    void onChange({ themeVars: vars })
+                    void onChange({ [varsKey]: vars })
                   }}
                 >
                   {name}
@@ -152,7 +170,7 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
             <div className="theme-grid">
               {THEME_VARS.map(([k, label]) => (
                 <label key={k} className="theme-var">
-                  <input type="color" value={toHex(settings.themeVars[k] ?? css.getPropertyValue(k).trim())} onChange={(e) => setVar(k, e.target.value)} />
+                  <input type="color" value={toHex(themeVars[k] ?? css.getPropertyValue(k).trim())} onChange={(e) => setVar(k, e.target.value)} />
                   {label}
                 </label>
               ))}
@@ -168,7 +186,7 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
                   try {
                     const parsed = JSON.parse(raw || '{}') as Record<string, string>
                     setRawError(null)
-                    void onChange({ themeVars: parsed })
+                    void onChange({ [varsKey]: parsed })
                   } catch (e) {
                     setRawError((e as Error).message)
                   }
