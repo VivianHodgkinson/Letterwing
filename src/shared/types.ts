@@ -345,3 +345,18 @@ export interface MailtoRequest {
   subject: string
   body: string
 }
+
+/** A message waiting in the Outbox (written while offline, or sending failed for lack of a connection) */
+export interface OutboxItem {
+  id: string
+  accountId: string
+  /** Every recipient's address */
+  to: string[]
+  subject: string
+  queuedAt: number
+  attempts: number
+  /** Why the last try failed */
+  error: string
+  /** Failed for a reason other than the connection: waits for you instead of retrying */
+  stuck: boolean
+}

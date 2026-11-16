@@ -14,6 +14,8 @@ interface Props {
   prefs: Record<string, FolderPref>
   /** Narrower layouts: the sidebar is a drawer, slid in when this is true */
   drawerOpen: boolean
+  /** Messages waiting to be sent; the Outbox shows only while there are some */
+  outboxCount: number
   view: View
   onView(v: View): void
   onAddAccount(): void
@@ -25,7 +27,7 @@ interface Props {
   onUnifiedMenu(e: React.MouseEvent): void
 }
 
-export function Sidebar({ accounts, folders, status, prefs, drawerOpen, view, onView, onAddAccount, onDropMessages, onFolderMenu, onAccountMenu, onUnifiedMenu }: Props) {
+export function Sidebar({ accounts, folders, status, prefs, drawerOpen, outboxCount, view, onView, onAddAccount, onDropMessages, onFolderMenu, onAccountMenu, onUnifiedMenu }: Props) {
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const totalUnread = accounts.reduce((n, a) => n + (folders[a.id]?.find((f) => f.role === 'inbox')?.unread ?? 0), 0)
@@ -79,6 +81,13 @@ export function Sidebar({ accounts, folders, status, prefs, drawerOpen, view, on
         <span className="fname">All inboxes</span>
         {totalUnread > 0 && <span className="count">{totalUnread}</span>}
       </button>
+      {(outboxCount > 0 || view.folderId === '*outbox') && (
+        <button className={`folder outbox-link ${view.folderId === '*outbox' ? 'active' : ''}`} onClick={() => onView({ accountId: null, folderId: '*outbox' })}>
+          <span className="ficon">📤</span>
+          <span className="fname">Outbox</span>
+          {outboxCount > 0 && <span className="count">{outboxCount}</span>}
+        </button>
+      )}
 
       {favourites.length > 0 && (
         <section className="favourites">

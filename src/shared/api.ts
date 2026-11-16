@@ -1,4 +1,4 @@
-import type { Account, MailtoRequest, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
+import type { Account, MailtoRequest, OutboxItem, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
 
 /** One entry of a right-click menu. The menu is drawn by the OS; the renderer gets back the id that was clicked. */
 export interface MenuItem {
@@ -93,7 +93,14 @@ export interface Api {
   attachPaths(paths: string[]): Promise<OutgoingAttachment[]>
   /** Saves to the server's Drafts folder; returns the message with its new server copy recorded */
   saveDraft(message: Outgoing): Promise<Outgoing>
-  sendMessage(message: Outgoing): Promise<void>
+  /** 'queued' when there's no connection: it waits in the Outbox and sends itself later */
+  sendMessage(message: Outgoing): Promise<'sent' | 'queued'>
+  listOutbox(): Promise<OutboxItem[]>
+  /** Try the Outbox now (one message, or all of them) */
+  retryOutbox(id?: string): Promise<void>
+  removeFromOutbox(id: string): Promise<void>
+  /** Take a message back out of the Outbox to change it */
+  editFromOutbox(id: string): Promise<Outgoing>
   discardDraft(message: Outgoing): Promise<void>
   /** Reopen a message from Drafts for editing */
   openDraft(key: string): Promise<Outgoing>
@@ -115,5 +122,5 @@ export type ApiMethod = keyof Api
 export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: string }
 
 /** Push events from main to renderer */
-export type EventChannel = 'compose:mailto' | 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message' | 'calendar:changed' | 'open:event' | 'update:status' | 'compose:new'
+export type EventChannel = 'outbox:changed' | 'compose:mailto' | 'sync:status' | 'mail:changed' | 'key:forward' | 'open:message' | 'calendar:changed' | 'open:event' | 'update:status' | 'compose:new'
 export type SyncEvent = SyncStatus

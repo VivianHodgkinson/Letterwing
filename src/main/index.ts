@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, Notification, powerMonitor, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, net, Notification, powerMonitor, shell, type MenuItemConstructorOptions } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
@@ -15,6 +15,7 @@ import * as store from './store'
 import * as sync from './sync'
 import * as calendar from './calendar'
 import * as pace from './pace'
+import * as outbox from './outbox'
 import { mailtoFromArgs, parseMailto, type MailtoRequest } from './mailto'
 import { detectProvider } from './signin'
 import { createTray, hasTray, iconPath, setTrayUnread } from './tray'
@@ -258,6 +259,45 @@ async function compiled(out: Outgoing, forDraft: boolean) {
       { forDraft }
     )
   }
+}
+
+/** Actually send: compile, hand to the account's server, then tidy up the draft and refresh Sent */
+async function deliver(message: Outgoing): Promise<void> {
+  const out = await materialise(message)
+  const { acc, msg } = await compiled(out, false)
+  await sync.connector(acc).send(msg, db.folderByRole(acc.id, 'sent')?.id ?? null)
+  db.addContacts([...out.to, ...out.cc, ...out.bcc])
+  await dropServerDraft(out)
+  const sent = db.folderByRole(acc.id, 'sent')
+  if (sent) setTimeout(() => void sync.syncAccount(acc, sent.id), 2000)
+}
+
+/**
+ * Send what's waiting in the Outbox, one at a time. Runs when the connection might be back (every
+ * 20 s while anything waits, on wake, after each sync); `force` also retries ones that failed for
+ * another reason (the Send now button).
+ */
+let flushing: Promise<void> | null = null
+function flushOutbox(force = false, only?: string): Promise<void> {
+  if (flushing) return flushing
+  flushing = (async () => {
+    let sentCount = 0
+    for (const { id, message } of outbox.due(force).filter((x) => !only || x.id === only)) {
+      if (!force && !net.isOnline()) break
+      try {
+        await deliver(message)
+        outbox.remove(id)
+        outbox.cleanUp(id)
+        sentCount++
+      } catch (e) {
+        outbox.failed(id, e)
+      }
+      send('outbox:changed', {})
+    }
+    if (sentCount && Notification.isSupported())
+      new Notification({ title: 'Letterwing', body: sentCount === 1 ? 'A message from your Outbox was sent.' : `${sentCount} messages from your Outbox were sent.` }).show()
+  })().finally(() => (flushing = null))
+  return flushing
 }
 
 async function dropServerDraft(out: Outgoing): Promise<void> {
@@ -590,13 +630,38 @@ const api: Api = {
     return { ...out, serverDraft }
   },
   async sendMessage(message) {
-    const out = await materialise(message)
-    const { acc, msg } = await compiled(out, false)
-    await sync.connector(acc).send(msg, db.folderByRole(acc.id, 'sent')?.id ?? null)
-    db.addContacts([...out.to, ...out.cc, ...out.bcc])
-    await dropServerDraft(out)
-    const sent = db.folderByRole(acc.id, 'sent')
-    if (sent) setTimeout(() => void sync.syncAccount(acc, sent.id), 2000)
+    // No connection: straight to the Outbox rather than a long wait for a timeout
+    if (!net.isOnline()) {
+      await outbox.add(message, 'No internet connection')
+      send('outbox:changed', {})
+      return 'queued'
+    }
+    try {
+      await deliver(message)
+      return 'sent'
+    } catch (e) {
+      if (!outbox.isConnectionError(e)) throw e
+      await outbox.add(message, (e as Error).message)
+      send('outbox:changed', {})
+      return 'queued'
+    }
+  },
+  async listOutbox() {
+    return outbox.list()
+  },
+  async retryOutbox(id) {
+    await flushOutbox(true, id)
+  },
+  async removeFromOutbox(id) {
+    if (outbox.remove(id)) outbox.cleanUp(id)
+    send('outbox:changed', {})
+  },
+  async editFromOutbox(id) {
+    // Its copied attachments stay put until it's sent or discarded again, since the message refers to them
+    const message = outbox.remove(id)
+    if (!message) throw new Error('That message is no longer in the Outbox')
+    send('outbox:changed', {})
+    return message
   },
   async discardDraft(message) {
     await dropServerDraft(message)
@@ -726,6 +791,13 @@ app.whenReady().then(() => {
   // Calendars refresh with the mail, after it so the inbox comes first
   sync.onCycle(() => void calendar.syncAll())
   void sync.syncAll().then(() => calendar.syncAll())
+  // The Outbox tries again whenever the connection may be back
+  setInterval(() => {
+    if (outbox.count() && net.isOnline()) void flushOutbox()
+  }, 20_000)
+  sync.onCycle(() => void flushOutbox())
+  pace.onWake(() => void flushOutbox())
+  if (outbox.count()) setTimeout(() => void flushOutbox(), 5_000)
 })
 
 app.on('before-quit', () => (quitting = true))

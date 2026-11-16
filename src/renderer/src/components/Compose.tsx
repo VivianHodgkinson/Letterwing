@@ -15,7 +15,8 @@ interface Props {
   initial: Outgoing
   accounts: Account[]
   onClose(): void
-  onSent(): void
+  /** queued: no connection, so it went to the Outbox */
+  onSent(queued: boolean): void
   onStatus(message: string, error?: boolean): void
 }
 
@@ -94,9 +95,9 @@ export const Compose = forwardRef<ComposeHandle, Props>(function Compose({ initi
     setState('sending')
     try {
       // Use the latest server draft (an autosave may have just finished) so it gets removed after sending
-      await api.sendMessage({ ...msg, serverDraft: latest.current.serverDraft })
+      const result = await api.sendMessage({ ...msg, serverDraft: latest.current.serverDraft })
       dirty.current = false
-      onSent()
+      onSent(result === 'queued')
     } catch (e) {
       sending.current = false
       setState('idle')

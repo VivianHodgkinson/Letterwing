@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ACTIONS, effectiveKeymap, type ActionId } from '@shared/keys'
 import type { MenuItem } from '@shared/api'
-import type { MailtoRequest } from '@shared/types'
-import { prefKey, type Account, type Folder, type FolderPref, type FolderRole, type MessageSummary, type Outgoing, type Settings, type SyncStatus } from '@shared/types'
+import type { MailtoRequest, OutboxItem } from '@shared/types'
+import {
+  prefKey,
+  type Account,
+  type Folder,
+  type FolderPref,
+  type FolderRole,
+  type MessageSummary,
+  type Outgoing,
+  type Settings,
+  type SyncStatus
+} from '@shared/types'
 import { api, on } from './api'
 import { AccountDialog } from './components/AccountDialog'
 import { CalendarView, type CalendarHandle } from './components/calendar/CalendarView'
@@ -13,6 +23,7 @@ import { Reader } from './components/Reader'
 import { SettingsDialog } from './components/SettingsDialog'
 import { ColorDialog } from './components/ColorDialog'
 import { GearIcon, MenuIcon, MoonIcon, SunIcon, SyncIcon } from './components/Icons'
+import { OutboxView } from './components/OutboxView'
 import { PromptDialog } from './components/PromptDialog'
 import { colourMenu } from './menus'
 import { Sidebar, sortFolders } from './components/Sidebar'
@@ -48,6 +59,8 @@ export function App() {
   const [prompt, setPrompt] = useState<{ title: string; label: string; initial?: string; ok: string; onSubmit(v: string): Promise<void> } | null>(null)
   const [compose, setCompose] = useState<{ initial: Outgoing; id: number } | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
+  const [outbox, setOutbox] = useState<OutboxItem[]>([])
+  const inOutbox = view.folderId === '*outbox'
   const [imagesRequest, setImagesRequest] = useState(0)
   const [mode, setMode] = useState<'mail' | 'calendar'>('mail')
   const [calEditing, setCalEditing] = useState(false)
@@ -107,11 +120,18 @@ export function App() {
 
   /** Reload the list, keeping as many rows as are showing so the scroll position holds */
   const loadMessages = useCallback(async () => {
+    if (view.folderId === '*outbox') return setMessages([])
     const limit = Math.max(PAGE, shown.current)
     const list = query.trim() ? await api.search(query, 200) : await api.listMessages(view.accountId, view.folderId, limit)
     setMessages(list)
     if (query.trim()) setHasMore(false)
   }, [view, query])
+
+  useEffect(() => {
+    const load = () => void api.listOutbox().then(setOutbox)
+    load()
+    return on('outbox:changed', load)
+  }, [])
 
   useEffect(() => {
     api.getSettings().then(setSettings)
@@ -324,7 +344,15 @@ export function App() {
   const remove = async (keys = selection()) => {
     if (!keys.length) return
     const inTrash = messages.filter((m) => keys.includes(m.key)).some((m) => folderOf(m)?.role === 'trash')
-    if (inTrash && !(await api.confirm({ message: `Permanently delete ${keys.length === 1 ? 'this message' : `${keys.length} messages`}?`, detail: "This can't be undone.", ok: 'Delete' }))) return
+    if (
+      inTrash &&
+      !(await api.confirm({
+        message: `Permanently delete ${keys.length === 1 ? 'this message' : `${keys.length} messages`}?`,
+        detail: "This can't be undone.",
+        ok: 'Delete'
+      }))
+    )
+      return
     await removeAndAdvance((k) => api.deleteMessages(k), 'delete', keys)
   }
   const moveTo = (folderId: string) => void removeAndAdvance((k) => api.moveMessages(k, folderId), 'move')
@@ -422,7 +450,9 @@ export function App() {
           }
         : { label: 'Move to (select messages from one account)', enabled: false },
       { id: 'archive', label: 'Archive', enabled: everyAccountHas('archive') && rows.every((r) => roleOf(r) !== 'archive'), shortcut: sc('archive') },
-      inJunk ? { id: 'notJunk', label: 'Not junk (move to Inbox)', enabled: !!(accountId && inbox) } : { id: 'junk', label: 'Move to Junk', enabled: everyAccountHas('junk') },
+      inJunk
+        ? { id: 'notJunk', label: 'Not junk (move to Inbox)', enabled: !!(accountId && inbox) }
+        : { id: 'junk', label: 'Move to Junk', enabled: everyAccountHas('junk') },
       { id: 'delete', label: inTrash ? 'Delete permanently…' : 'Delete', shortcut: sc('delete') },
       SEP,
       ...(single
@@ -571,7 +601,10 @@ export function App() {
       case 'sync':
         return void api.syncNow(a.id).catch(report('sync'))
       case 'empty':
-        if (!(await api.confirm({ message: `Permanently delete everything in ${f.name}?`, detail: `${a.email}\nThis can't be undone.`, ok: `Empty ${f.name}` }))) return
+        if (
+          !(await api.confirm({ message: `Permanently delete everything in ${f.name}?`, detail: `${a.email}\nThis can't be undone.`, ok: `Empty ${f.name}` }))
+        )
+          return
         return void api
           .emptyFolder(a.id, f.id)
           .then(() => say(`${f.name} emptied.`))
@@ -632,7 +665,13 @@ export function App() {
       case 'copy':
         return void api.copyText(a.email)
       case 'remove':
-        if (!(await api.confirm({ message: `Remove ${a.email} from Letterwing?`, detail: 'Your mail stays on the server. The copy on this computer and the saved sign-in are deleted.', ok: 'Remove account' })))
+        if (
+          !(await api.confirm({
+            message: `Remove ${a.email} from Letterwing?`,
+            detail: 'Your mail stays on the server. The copy on this computer and the saved sign-in are deleted.',
+            ok: 'Remove account'
+          }))
+        )
           return
         leaveIfShowing(a.id)
         try {
@@ -800,9 +839,9 @@ export function App() {
       initial={compose.initial}
       accounts={accounts}
       onClose={() => setCompose(null)}
-      onSent={() => {
+      onSent={(queued) => {
         setCompose(null)
-        say('Sent.')
+        say(queued ? "No connection right now: it's in the Outbox and will send itself when you're back online." : 'Sent.')
       }}
       onStatus={say}
     />
@@ -812,7 +851,12 @@ export function App() {
     <div className="app">
       <header className="topbar">
         {layout !== 'wide' && (
-          <button className="icon-btn menu-btn" title={mode === 'mail' ? 'Folders' : 'Calendars'} aria-label="Show folders" onClick={() => setDrawer((d) => !d)}>
+          <button
+            className="icon-btn menu-btn"
+            title={mode === 'mail' ? 'Folders' : 'Calendars'}
+            aria-label="Show folders"
+            onClick={() => setDrawer((d) => !d)}
+          >
             <span>
               <MenuIcon />
             </span>
@@ -872,7 +916,8 @@ export function App() {
 
       {(notice || errors.length > 0) && (
         <div className={`banner ${notice && !notice.error ? 'info' : ''}`} onClick={() => setNotice(null)}>
-          {notice?.text ?? errors
+          {notice?.text ??
+            errors
               .map((s) => {
                 // Connector messages usually start with the account name already
                 const name = accountById[s.accountId]?.name ?? 'Account'
@@ -903,6 +948,7 @@ export function App() {
           prefs={settings.folderPrefs}
           view={view}
           drawerOpen={drawer}
+          outboxCount={outbox.length}
           onView={(v) => {
             setDrawer(false)
             setReaderOpen(false)
@@ -931,6 +977,24 @@ export function App() {
             <button className="primary" onClick={() => setDialog('account')}>
               Add account
             </button>
+          </div>
+        ) : inOutbox ? (
+          <div className="panes">
+            {/* Narrow windows: the editor (after Edit) takes the whole space */}
+            {!(singlePane && composeView) && (
+              <OutboxView
+                items={outbox}
+                accounts={accountById}
+                onStatus={say}
+                onEdit={(id) =>
+                  void api
+                    .editFromOutbox(id)
+                    .then((m) => startCompose(m))
+                    .catch(fail)
+                }
+              />
+            )}
+            {(singlePane || settings.readingPane !== 'off') && composeView}
           </div>
         ) : (
           <div className="panes" data-show={singlePane ? (readerOpen || composeView ? 'detail' : 'list') : 'both'}>
