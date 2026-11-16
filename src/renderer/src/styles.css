@@ -173,7 +173,7 @@ small { color: var(--text-faint); }
 .dialog input:focus, .dialog select:focus, .dialog textarea:focus { border-color: var(--accent); }
 .dialog fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
 .dialog legend { font-size: 12px; color: var(--text-dim); padding: 0 4px; }
-.row { display: flex; gap: 8px; align-items: flex-end; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .row > input { flex: 1; }
 .grow { flex: 1; }
 /* Round icon buttons at the right of the top bar */
@@ -408,3 +408,66 @@ kbd { font: 11.5px ui-monospace, monospace; background: var(--bg-3); border: 1px
 .cal-group-name input { accent-color: var(--acct); width: 15px; height: 15px; }
 .cal-group-name .cal-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-group .cal-item { padding-left: 14px; }
+
+/* ------------------------------------------------------------ responsive layouts
+   The app sets data-layout from the window width (or the Layout setting):
+   wide ≥ 1200px as designed; medium hides the folder/calendar list in a drawer;
+   narrow shows one pane at a time and trims the top bar. */
+.body, .calendar { position: relative; }
+.menu-btn span { font-size: 18px; }
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 7; }
+.dialog { max-width: calc(100vw - 24px); }
+.dialog.wide { max-width: calc(100vw - 24px); }
+.compose-overlay { max-width: calc(100vw - 16px); }
+
+:root[data-layout='medium'] .sidebar,
+:root[data-layout='narrow'] .sidebar,
+:root[data-layout='medium'] .cal-side,
+:root[data-layout='narrow'] .cal-side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 8;
+  width: min(300px, 85vw);
+  transform: translateX(-105%);
+  transition: transform 0.18s ease;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+}
+:root[data-layout='medium'] .sidebar.open,
+:root[data-layout='narrow'] .sidebar.open,
+:root[data-layout='medium'] .cal-side.open,
+:root[data-layout='narrow'] .cal-side.open { transform: none; }
+:root[data-layout='medium'] .brand,
+:root[data-layout='narrow'] .brand { display: none; }
+
+/* Medium: the list gives up some width so the message still has room */
+:root[data-layout='medium'] .message-list { width: clamp(280px, 42%, var(--list-w)); }
+
+/* Narrow: list or message, never both */
+:root[data-layout='narrow'] .panes[data-show='list'] > :not(.message-list) { display: none; }
+:root[data-layout='narrow'] .panes[data-show='detail'] > .message-list { display: none; }
+:root[data-layout='narrow'] .message-list { width: auto; flex: 1; border-right: 0; }
+:root[data-layout='narrow'] .topbar { gap: 6px; padding: 6px 8px; }
+:root[data-layout='narrow'] .topbar .label { display: none; }
+:root[data-layout='narrow'] .mode-tabs button { padding: 4px 9px; }
+:root[data-layout='narrow'] .new-mail { padding: 6px 11px; }
+:root[data-layout='narrow'] .search { min-width: 0; padding: 6px 10px; }
+:root[data-layout='narrow'] .reader-scroll { padding: 10px 8px 30px; }
+:root[data-layout='narrow'] .reader-toolbar { padding: 6px 8px; gap: 4px; }
+:root[data-layout='narrow'] .reader-subject { font-size: 1.15em; }
+:root[data-layout='narrow'] .toolbar { flex-wrap: wrap; }
+:root[data-layout='narrow'] .cal-head { flex-wrap: wrap; padding: 6px 8px; row-gap: 6px; }
+:root[data-layout='narrow'] .cal-head h2 { font-size: 1em; margin-left: 4px; }
+:root[data-layout='narrow'] .cal-scope { padding: 4px 8px; }
+:root[data-layout='narrow'] .cal-scope .dim { display: none; }
+/* Event details float over the grid instead of squeezing it */
+:root[data-layout='narrow'] .event-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(360px, 100%); z-index: 4; box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35); }
+.reader.empty { flex-direction: column; gap: 10px; }
+/* Narrow: the date and account badge go under the sender instead of beside it; long addresses wrap */
+:root[data-layout='narrow'] .card-head { flex-wrap: wrap; }
+:root[data-layout='narrow'] .card-head .grow { min-width: 0; flex-basis: calc(100% - 60px); }
+:root[data-layout='narrow'] .card-head .from { overflow-wrap: anywhere; }
+:root[data-layout='narrow'] .card-head .meta.right { flex-basis: 100%; padding-left: 56px; text-align: left; display: flex; gap: 8px; align-items: center; flex-direction: row-reverse; justify-content: flex-end; }
+:root[data-layout='narrow'] .card-actions { padding-left: 14px; flex-wrap: wrap; }
+.dialog > .tabs { overflow-x: auto; }

@@ -11,7 +11,7 @@ import { MoveDialog } from './components/MoveDialog'
 import { Reader } from './components/Reader'
 import { SettingsDialog } from './components/SettingsDialog'
 import { ColorDialog } from './components/ColorDialog'
-import { GearIcon, MoonIcon, SunIcon, SyncIcon } from './components/Icons'
+import { GearIcon, MenuIcon, MoonIcon, SunIcon, SyncIcon } from './components/Icons'
 import { PromptDialog } from './components/PromptDialog'
 import { colourMenu } from './menus'
 import { Sidebar, sortFolders } from './components/Sidebar'
@@ -66,6 +66,26 @@ export function App() {
     mq.addEventListener('change', update)
     return () => mq.removeEventListener('change', update)
   }, [settings?.theme])
+
+  // Layout follows the window width: tiling window managers resize freely
+  const [width, setWidth] = useState(window.innerWidth)
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const layout: 'wide' | 'medium' | 'narrow' =
+    settings && settings.layout !== 'auto' ? settings.layout : width >= 1200 ? 'wide' : width >= 760 ? 'medium' : 'narrow'
+  const singlePane = layout === 'narrow'
+  /** The folder sidebar (or calendar list) slid in over the content, when the layout has no room for it */
+  const [drawer, setDrawer] = useState(false)
+  /** One pane at a time: showing the open message instead of the list */
+  const [readerOpen, setReaderOpen] = useState(false)
+  useEffect(() => {
+    document.documentElement.dataset.layout = layout
+    if (layout === 'wide') setDrawer(false)
+    if (!singlePane) setReaderOpen(false)
+  }, [layout])
 
   const say = useCallback((text: string, error = false) => setNotice({ text, error }), [])
   const fail = useCallback((e: Error) => say(e.message, true), [say])
@@ -179,13 +199,14 @@ export function App() {
     if (!settings) return
     const root = document.documentElement
     root.dataset.density = settings.density
-    root.dataset.pane = settings.readingPane
+    // Narrow windows always show one pane at a time, whatever the reading pane setting
+    root.dataset.pane = singlePane ? 'right' : settings.readingPane
     const applied = Object.entries(dark ? settings.themeVars : settings.themeVarsLight)
     for (const [k, v] of applied) root.style.setProperty(k, v)
     return () => {
       for (const [k] of applied) root.style.removeProperty(k)
     }
-  }, [settings, dark])
+  }, [settings, dark, singlePane])
 
   const accountById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
   const current = useMemo(() => messages.find((m) => m.key === primary) ?? null, [messages, primary])
@@ -640,7 +661,10 @@ export function App() {
     firstMessage: () => move(() => 0),
     lastMessage: () => move(() => messages.length - 1),
     selectAll: () => setSelected(new Set(messages.map((m) => m.key))),
-    openMessage: () => void open(),
+    openMessage: () => {
+      if (singlePane && current) setReaderOpen(true)
+      void open()
+    },
     goInbox: () => {
       setView(UNIFIED)
       setQuery('')
@@ -677,6 +701,9 @@ export function App() {
       searchRef.current?.select()
     },
     clearSearch: () => {
+      // Escape steps back: close the drawer, then the open message, then clear the search
+      if (drawer) return setDrawer(false)
+      if (singlePane && readerOpen && !compose) return setReaderOpen(false)
       setQuery('')
       searchRef.current?.blur()
     },
@@ -724,13 +751,20 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
+        {layout !== 'wide' && (
+          <button className="icon-btn menu-btn" title={mode === 'mail' ? 'Folders' : 'Calendars'} aria-label="Show folders" onClick={() => setDrawer((d) => !d)}>
+            <span>
+              <MenuIcon />
+            </span>
+          </button>
+        )}
         <div className="brand">Letterwing</div>
         <div className="tabs mode-tabs">
           <button className={mode === 'mail' ? 'active' : ''} onClick={() => setMode('mail')} title="Mail (Ctrl+1)">
-            ✉ Mail
+            ✉ <span className="label">Mail</span>
           </button>
           <button className={mode === 'calendar' ? 'active' : ''} onClick={() => setMode('calendar')} title="Calendar (Ctrl+2)">
-            📅 Calendar
+            📅 <span className="label">Calendar</span>
           </button>
         </div>
         {mode === 'mail' && (
@@ -743,7 +777,7 @@ export function App() {
               }}
               disabled={!accounts.length}
             >
-              ✎ New mail
+              ✎ <span className="label">New mail</span>
             </button>
             <input ref={searchRef} className="search" placeholder="Search all mail" value={query} onChange={(e) => setQuery(e.target.value)} />
           </>
@@ -796,6 +830,9 @@ export function App() {
           onSettings={async (patch) => setSettings(await api.saveSettings(patch))}
           onStatus={say}
           onEditing={setCalEditing}
+          layout={layout}
+          drawerOpen={drawer}
+          onCloseDrawer={() => setDrawer(false)}
         />
       )}
       <div className="body" hidden={mode !== 'mail'}>
@@ -805,7 +842,10 @@ export function App() {
           status={status}
           prefs={settings.folderPrefs}
           view={view}
+          drawerOpen={drawer}
           onView={(v) => {
+            setDrawer(false)
+            setReaderOpen(false)
             setView(v)
             setQuery('')
             setPrimary(null)
@@ -833,7 +873,7 @@ export function App() {
             </button>
           </div>
         ) : (
-          <div className="panes">
+          <div className="panes" data-show={singlePane ? (readerOpen || composeView ? 'detail' : 'list') : 'both'}>
             <MessageList
               messages={messages}
               primary={primary}
@@ -841,7 +881,10 @@ export function App() {
               accounts={accountById}
               showAccount={view.accountId === null || !!query}
               loadingMore={loadingMore}
-              onSelect={select}
+              onSelect={(m, how) => {
+                select(m, how)
+                if (singlePane && how === 'single') setReaderOpen(true)
+              }}
               onOpen={(m) => void open(m)}
               onFlag={(m) => void api.setFlagged([m.key], !m.flagged).catch(fail)}
               onMenu={(e, m) => {
@@ -850,9 +893,10 @@ export function App() {
               }}
               onEndReached={() => void loadMore()}
             />
-            {settings.readingPane !== 'off' &&
+            {(singlePane || settings.readingPane !== 'off') &&
               (composeView ?? (
                 <Reader
+                  onBack={singlePane ? () => setReaderOpen(false) : undefined}
                   message={current}
                   selectedCount={selected.size}
                   accounts={accountById}
@@ -880,7 +924,8 @@ export function App() {
       </div>
 
       {/* With the reading pane off, writing happens in a full-size overlay */}
-      {settings.readingPane === 'off' && composeView && <div className="compose-overlay">{composeView}</div>}
+      {settings.readingPane === 'off' && !singlePane && composeView && <div className="compose-overlay">{composeView}</div>}
+      {drawer && <div className="drawer-backdrop" onClick={() => setDrawer(false)} />}
 
       {dialog === 'move' && moveAccount && (
         <MoveDialog

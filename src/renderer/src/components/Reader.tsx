@@ -27,9 +27,11 @@ interface Props {
   /** Bumped by the "Load remote images" shortcut */
   imagesRequest: number
   actions: ReaderActions
+  /** One pane at a time: go back to the list */
+  onBack?: () => void
 }
 
-export function Reader({ message, selectedCount, accounts, settings, isDraft, imagesRequest, actions }: Props) {
+export function Reader({ message, selectedCount, accounts, settings, isDraft, imagesRequest, actions, onBack }: Props) {
   const [thread, setThread] = useState<MessageSummary[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [allowImages, setAllowImages] = useState(false)
@@ -58,12 +60,27 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
     if (imagesRequest > 0) setAllowImages(true)
   }, [imagesRequest])
 
-  if (!message) return <div className="reader empty">{selectedCount > 1 ? `${selectedCount} messages selected` : 'Select a message to read it.'}</div>
+  if (!message)
+    return (
+      <div className="reader empty">
+        {onBack && (
+          <button className="ghost" onClick={onBack}>
+            ← Back to the list
+          </button>
+        )}
+        {selectedCount > 1 ? `${selectedCount} messages selected` : 'Select a message to read it.'}
+      </div>
+    )
 
   const multi = selectedCount > 1
   return (
     <div className="reader">
       <div className="reader-toolbar">
+        {onBack && (
+          <button className="ghost back" onClick={onBack} title="Back to the list (Esc)">
+            ← Back
+          </button>
+        )}
         <button className="ghost" onClick={actions.archive} title="Archive">
           🗄 Archive
         </button>
@@ -273,7 +290,11 @@ function InviteCard({ invite: i, onRespond }: { invite: Invite; onRespond(a: 'ac
         {i.organizer && <div className="meta">Organizer: {whoFull(i.organizer)}</div>}
         {clashes.length > 0 && (
           <div className="invite-clash">
-            Conflicts with {clashes.slice(0, 2).map((c) => c.title).join(', ')}
+            Conflicts with{' '}
+            {clashes
+              .slice(0, 2)
+              .map((c) => c.title)
+              .join(', ')}
             {clashes.length > 2 ? ` and ${clashes.length - 2} more` : ''}
           </div>
         )}
@@ -325,7 +346,16 @@ function MailFrame({ body, remoteImages }: { body: MessageBody; remoteImages: bo
     }
   }, [doc])
 
-  return <iframe ref={frame} className="mail-frame" title="Message" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height }} />
+  return (
+    <iframe
+      ref={frame}
+      className="mail-frame"
+      title="Message"
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      srcDoc={doc}
+      style={{ height }}
+    />
+  )
 }
 
 function renderDoc(body: MessageBody, remoteImages: boolean): string {

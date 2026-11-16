@@ -237,6 +237,8 @@ export type Density = 'compact' | 'comfortable' | 'spacious'
 export interface Settings {
   readingPane: ReadingPane
   density: Density
+  /** Screen layout: 'auto' fits the window width (tiling window managers, small screens); the others force one */
+  layout: 'auto' | 'wide' | 'medium' | 'narrow'
   /** Light or dark, or follow the operating system */
   theme: 'system' | 'light' | 'dark'
   /** CSS variable overrides, e.g. { "--accent": "#ff8800" }. The whole look is driven by these. */

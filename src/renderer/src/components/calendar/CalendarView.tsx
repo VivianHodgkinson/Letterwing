@@ -25,11 +25,18 @@ interface Props {
   onStatus(message: string, error?: boolean): void
   /** True while a dialog/editor is open, so the app's shortcuts stay out of the way */
   onEditing(open: boolean): void
+  /** How much room there is: narrower layouts hide the calendar list in a drawer and show fewer days */
+  layout: 'wide' | 'medium' | 'narrow'
+  drawerOpen: boolean
+  onCloseDrawer(): void
 }
 
 const calKey = (c: { accountId: string; calendarId?: string; id?: string }) => `${c.accountId}\u0000${c.calendarId ?? c.id}`
 
-export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView({ settings, accounts, onSettings, onStatus, onEditing }, ref) {
+export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
+  { settings, accounts, onSettings, onStatus, onEditing, layout, drawerOpen, onCloseDrawer },
+  ref
+) {
   const [anchor, setAnchor] = useState(() => startOfDay(Date.now()))
   const [serverCalendars, setCalendars] = useState<CalendarInfo[]>([])
   const [colorPick, setColorPick] = useState<CalendarInfo | null>(null)
@@ -39,7 +46,9 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
     input: EventInput
     occurrence: boolean
   } | null>(null)
-  const view = settings.calendarView
+  // A narrow window shows one day at a time (month still works); the chosen view comes back when there's room
+  const narrow = layout === 'narrow'
+  const view = narrow && (settings.calendarView === 'week' || settings.calendarView === 'workweek') ? 'day' : settings.calendarView
   const days = useMemo(() => viewDays(view, anchor), [view, anchor])
   const hidden = useMemo(() => new Set(settings.hiddenCalendars), [settings.hiddenCalendars])
   const accountById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
@@ -73,7 +82,8 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
   const calAccounts = useMemo(() => accounts.filter((a) => calendars.some((c) => c.accountId === a.id)), [accounts, calendars])
   const scope =
     settings.calendarScope === 'split'
-      ? calAccounts.length > 1
+      ? // Side by side needs the width; narrower windows show them together until there's room again
+        calAccounts.length > 1 && layout === 'wide'
         ? 'split'
         : 'all'
       : calAccounts.some((a) => a.id === settings.calendarScope)
@@ -381,11 +391,18 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
 
   return (
     <div className="calendar">
-      <aside className="cal-side">
+      <aside className={`cal-side ${drawerOpen ? 'open' : ''}`}>
         <button className="primary" onClick={newAtNextSlot} disabled={!calendars.some((c) => !c.readOnly)}>
           + New event
         </button>
-        <MiniMonth anchor={anchor} days={view === 'month' ? [] : days} onPick={setAnchor} />
+        <MiniMonth
+          anchor={anchor}
+          days={view === 'month' ? [] : days}
+          onPick={(d) => {
+            setAnchor(d)
+            onCloseDrawer()
+          }}
+        />
         {grouped.map(([accountId, cals]) => (
           <section
             key={accountId}
@@ -449,11 +466,13 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
                 ['week', 'Week'],
                 ['month', 'Month']
               ] as const
-            ).map(([v, l]) => (
-              <button key={v} className={view === v ? 'active' : ''} onClick={() => void onSettings({ calendarView: v })}>
-                {l}
-              </button>
-            ))}
+            )
+              .filter(([v]) => !narrow || v === 'day' || v === 'month')
+              .map(([v, l]) => (
+                <button key={v} className={view === v ? 'active' : ''} onClick={() => void onSettings({ calendarView: v })}>
+                  {l}
+                </button>
+              ))}
           </div>
         </div>
         {calAccounts.length > 1 && (
@@ -478,13 +497,15 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
                   <span className="badge small">{a.label}</span> {a.email}
                 </button>
               ))}
-              <button
-                className={scope === 'split' ? 'active' : ''}
-                onClick={() => void onSettings({ calendarScope: 'split' })}
-                title="Each account in its own column"
-              >
-                Side by side
-              </button>
+              {layout === 'wide' && (
+                <button
+                  className={scope === 'split' ? 'active' : ''}
+                  onClick={() => void onSettings({ calendarScope: 'split' })}
+                  title="Each account in its own column"
+                >
+                  Side by side
+                </button>
+              )}
             </div>
           </div>
         )}

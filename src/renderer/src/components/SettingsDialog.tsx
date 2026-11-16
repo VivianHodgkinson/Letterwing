@@ -93,6 +93,15 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
             <h3>Layout</h3>
             <div className="row">
               <label>
+                Layout
+                <select value={settings.layout} onChange={(e) => void onChange({ layout: e.target.value as Settings['layout'] })}>
+                  <option value="auto">Fit the window</option>
+                  <option value="wide">Always wide</option>
+                  <option value="medium">Always medium (folders in a drawer)</option>
+                  <option value="narrow">Always narrow (one pane at a time)</option>
+                </select>
+              </label>
+              <label>
                 Appearance
                 <select value={settings.theme} onChange={(e) => void onChange({ theme: e.target.value as Settings['theme'] })}>
                   <option value="system">Match system</option>

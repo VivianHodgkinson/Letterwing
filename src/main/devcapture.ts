@@ -24,6 +24,12 @@ export async function runCapture(win: BrowserWindow): Promise<void> {
     console.log('[capture step]', kind, String(arg).slice(0, 60))
     try {
       if (kind === 'wait') await new Promise((r) => setTimeout(r, Number(arg)))
+      else if (kind === 'size') {
+        // "560x900": try the layout at another window size
+        const [w, h] = String(arg).split('x').map(Number)
+        win.setSize(w, h)
+        await new Promise((r) => setTimeout(r, 600))
+      }
       else if (kind === 'js') console.log('[capture js]', JSON.stringify(await win.webContents.executeJavaScript(String(arg), true)))
       else if (kind === 'shot') {
         // Offscreen rendering (set on the window in capture mode) hands over each painted frame

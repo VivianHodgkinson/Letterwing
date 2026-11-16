@@ -12,6 +12,8 @@ interface Props {
   status: Record<string, SyncStatus>
   /** Favourites and colours */
   prefs: Record<string, FolderPref>
+  /** Narrower layouts: the sidebar is a drawer, slid in when this is true */
+  drawerOpen: boolean
   view: View
   onView(v: View): void
   onAddAccount(): void
@@ -23,7 +25,7 @@ interface Props {
   onUnifiedMenu(e: React.MouseEvent): void
 }
 
-export function Sidebar({ accounts, folders, status, prefs, view, onView, onAddAccount, onDropMessages, onFolderMenu, onAccountMenu, onUnifiedMenu }: Props) {
+export function Sidebar({ accounts, folders, status, prefs, drawerOpen, view, onView, onAddAccount, onDropMessages, onFolderMenu, onAccountMenu, onUnifiedMenu }: Props) {
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const totalUnread = accounts.reduce((n, a) => n + (folders[a.id]?.find((f) => f.role === 'inbox')?.unread ?? 0), 0)
@@ -71,7 +73,7 @@ export function Sidebar({ accounts, folders, status, prefs, view, onView, onAddA
   }
 
   return (
-    <nav className="sidebar">
+    <nav className={`sidebar ${drawerOpen ? 'open' : ''}`}>
       <button className={`folder unified ${view.folderId === '*inbox' ? 'active' : ''}`} onClick={() => onView({ accountId: null, folderId: '*inbox' })} onContextMenu={onUnifiedMenu}>
         <span className="ficon">✉</span>
         <span className="fname">All inboxes</span>

@@ -44,8 +44,9 @@ function createWindow(): void {
   win = new BrowserWindow({
     width: 1480,
     height: 920,
-    minWidth: 900,
-    minHeight: 560,
+    // Small on purpose: tiling window managers size windows freely, and the layout adapts down to phone-like widths
+    minWidth: 360,
+    minHeight: 400,
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0d12' : '#ffffff',
     title: 'Letterwing',
