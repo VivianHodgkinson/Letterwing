@@ -253,6 +253,12 @@ export interface Settings {
   icsSubscriptions: IcsSubscription[]
   /** Calendars unticked in the calendar sidebar, as "accountId\u0000calendarId" */
   hiddenCalendars: string[]
+  /** Which calendars the calendar view shows: 'all' together, 'split' side by side per account, or one account's id */
+  calendarScope: string
+  /** Calendar colours chosen in Letterwing, by "accountId\u0000calendarId"; otherwise the server's colour */
+  calendarColors: Record<string, string>
+  /** Favourite folders and folder colours, by "accountId\u0000folderId". Kept locally: servers have nothing for this. */
+  folderPrefs: Record<string, FolderPref>
   calendarView: CalendarView
   /** Working hours: the time grid scrolls here and shades the rest */
   workDayStart: number
@@ -296,3 +302,25 @@ export interface UpdateStatus {
   /** Command to install a downloaded Linux package */
   installCommand?: string
 }
+
+export interface FolderPref {
+  /** Set when the folder is a favourite; favourites are listed in this order */
+  favourite?: number
+  /** CSS colour */
+  color?: string
+}
+
+/** Key for per-folder and per-calendar preferences */
+export const prefKey = (accountId: string, id: string): string => `${accountId}\u0000${id}`
+
+/** Colours offered for folders and calendars. The emoji stand in for a swatch in native menus. */
+export const PALETTE: { name: string; color: string; swatch: string }[] = [
+  { name: 'Red', color: '#e5484d', swatch: '🔴' },
+  { name: 'Orange', color: '#f76b15', swatch: '🟠' },
+  { name: 'Yellow', color: '#e2a336', swatch: '🟡' },
+  { name: 'Green', color: '#30a46c', swatch: '🟢' },
+  { name: 'Blue', color: '#3e8ee8', swatch: '🔵' },
+  { name: 'Purple', color: '#8e4ec6', swatch: '🟣' },
+  { name: 'Brown', color: '#a18072', swatch: '🟤' },
+  { name: 'Grey', color: '#8b8d98', swatch: '⚪' }
+]

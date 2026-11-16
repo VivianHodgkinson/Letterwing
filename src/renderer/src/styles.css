@@ -60,6 +60,11 @@ small { color: var(--text-faint); }
 .folder:hover, .account-head:hover { background: var(--bg-2); }
 .folder.active { background: var(--accent-soft); color: var(--text); }
 .folder.unified { font-weight: 600; margin-bottom: 6px; }
+/* A folder colour: a stripe on the left and the name in that colour */
+.folder.colored { box-shadow: inset 3px 0 0 var(--fc); }
+.folder.colored .fname { color: color-mix(in srgb, var(--fc) 75%, var(--text)); }
+.favourites { margin-bottom: 4px; }
+.section-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); padding: 6px 10px 2px; }
 .ficon { width: 18px; text-align: center; opacity: 0.8; font-size: 0.9em; }
 .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .count { font-size: 11px; font-weight: 700; color: var(--unread); }
@@ -358,3 +363,23 @@ kbd { font: 11.5px ui-monospace, monospace; background: var(--bg-3); border: 1px
 /* Account heading shows the email address: keep its case */
 .account-head .aname { text-transform: none; letter-spacing: 0; font-size: 12.5px; }
 .prompt-dialog { width: 400px; }
+.color-dialog { width: 360px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; }
+.swatch.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg-1) inset; }
+.color-dialog input[type='color'] { width: 36px; height: 28px; border: 1px solid var(--border); border-radius: var(--radius); background: none; padding: 1px; }
+
+/* Calendar: one pane, or one per account side by side */
+.cal-panes { flex: 1; display: flex; min-width: 0; min-height: 0; }
+.cal-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.cal-pane > .timegrid, .cal-pane > .monthgrid { flex: 1; min-height: 0; }
+.cal-panes.split .cal-pane + .cal-pane { border-left: 2px solid var(--border); }
+.cal-pane-head { display: flex; align-items: center; gap: 6px; padding: 5px 12px; font-weight: 600; font-size: 12.5px; border-bottom: 1px solid var(--border); box-shadow: inset 0 3px 0 var(--acct, var(--accent)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-panes.split .mg-cell .ev { font-size: 11px; }
+.cal-scope { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.scope-tabs { width: auto; min-width: 0; overflow-x: auto; }
+.scope-tabs button { flex: none; padding: 4px 10px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.cal-group-name { display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text-dim); box-shadow: inset 3px 0 0 var(--acct); padding: 3px 4px 3px 8px; border-radius: 2px; }
+.cal-group-name input { accent-color: var(--acct); width: 15px; height: 15px; }
+.cal-group-name .cal-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-group .cal-item { padding-left: 14px; }

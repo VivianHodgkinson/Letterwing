@@ -5,7 +5,7 @@ import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { detectMimeType } from 'nodemailer/lib/mime-funcs'
 import type { Api, ApiMethod, IpcResult, MenuItem } from '@shared/api'
-import type { Account, MessageBody, MessageSummary, Outgoing, OutgoingAttachment } from '@shared/types'
+import { prefKey, type Account, type MessageBody, type MessageSummary, type Outgoing, type OutgoingAttachment } from '@shared/types'
 import { compile } from './compose'
 import { connectorFor } from './connectors'
 import type { AttachmentData } from './connectors/types'
@@ -298,6 +298,27 @@ async function refreshFolders(acc: Account): Promise<void> {
   send('mail:changed', { accountId: acc.id })
 }
 
+/**
+ * Favourites and colours follow a folder when it changes ID (IMAP renames change the path, and the paths of its
+ * subfolders), and go when it's deleted. `rename` maps an old folder ID to its new one.
+ */
+function movePrefs(accountId: string, rename: (folderId: string) => string | null): void {
+  const prefs = store.getSettings().folderPrefs
+  const prefix = prefKey(accountId, '')
+  let changed = false
+  const next: typeof prefs = {}
+  for (const [k, v] of Object.entries(prefs)) {
+    if (!k.startsWith(prefix)) {
+      next[k] = v
+      continue
+    }
+    const to = rename(k.slice(prefix.length))
+    if (to !== k.slice(prefix.length)) changed = true
+    if (to !== null) next[prefKey(accountId, to)] = v
+  }
+  if (changed) store.saveSettings({ folderPrefs: next })
+}
+
 function editableFolder(accountId: string, folderId: string) {
   const f = db.getFolder(accountId, folderId)
   if (!f) throw new Error('That folder no longer exists.')
@@ -368,6 +389,7 @@ const api: Api = {
     store.saveAccounts(store.getAccounts().filter((a) => a.id !== id))
     store.setSecret(id, null)
     db.removeAccountData(id)
+    movePrefs(id, () => null)
   },
 
   async listFolders(accountId) {
@@ -458,16 +480,26 @@ const api: Api = {
     await refreshFolders(acc)
   },
   async renameFolder(accountId, folderId, name) {
-    editableFolder(accountId, folderId)
+    const before = editableFolder(accountId, folderId)
     const acc = account(accountId)
     await sync.connector(acc).renameFolder(folderId, name)
     await refreshFolders(acc)
+    // Graph keeps the ID; on IMAP the folder (and everything under it) has a new path
+    const after = db.listFolders(accountId).find((f) => f.parentId === before.parentId && f.name === name.trim())
+    if (after && after.id !== folderId) {
+      // The hierarchy separator, read off a subfolder's new path ("Projects/Acme" -> "/")
+      const child = db.listFolders(accountId).find((f) => f.parentId === after.id)
+      const sep = child ? child.id.charAt(after.id.length) : null
+      movePrefs(accountId, (id) => (id === folderId ? after.id : sep && id.startsWith(folderId + sep) ? after.id + id.slice(folderId.length) : id))
+    }
   },
   async deleteFolder(accountId, folderId) {
     editableFolder(accountId, folderId)
     const acc = account(accountId)
     await sync.connector(acc).deleteFolder(folderId)
     await refreshFolders(acc)
+    const still = new Set(db.listFolders(accountId).map((f) => f.id))
+    movePrefs(accountId, (id) => (still.has(id) ? id : null))
   },
   async openAttachment(key, attachmentId) {
     const a = await fetchAttachment(key, attachmentId)

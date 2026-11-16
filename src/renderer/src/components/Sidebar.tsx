@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Account, Folder, FolderRole, SyncStatus } from '@shared/types'
+import { prefKey, type Account, type Folder, type FolderPref, type FolderRole, type SyncStatus } from '@shared/types'
 import type { View } from '../App'
 import { DRAG_TYPE } from './MessageList'
 
@@ -10,6 +10,8 @@ interface Props {
   accounts: Account[]
   folders: Record<string, Folder[]>
   status: Record<string, SyncStatus>
+  /** Favourites and colours */
+  prefs: Record<string, FolderPref>
   view: View
   onView(v: View): void
   onAddAccount(): void
@@ -21,10 +23,52 @@ interface Props {
   onUnifiedMenu(e: React.MouseEvent): void
 }
 
-export function Sidebar({ accounts, folders, status, view, onView, onAddAccount, onDropMessages, onFolderMenu, onAccountMenu, onUnifiedMenu }: Props) {
+export function Sidebar({ accounts, folders, status, prefs, view, onView, onAddAccount, onDropMessages, onFolderMenu, onAccountMenu, onUnifiedMenu }: Props) {
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const totalUnread = accounts.reduce((n, a) => n + (folders[a.id]?.find((f) => f.role === 'inbox')?.unread ?? 0), 0)
+
+  // Favourites from every account, in the order they were added (or rearranged)
+  const favourites = accounts
+    .flatMap((a) => (folders[a.id] ?? []).map((f) => ({ a, f, order: prefs[prefKey(a.id, f.id)]?.favourite })))
+    .filter((x): x is { a: Account; f: Folder; order: number } => x.order !== undefined)
+    .sort((x, y) => x.order - y.order)
+
+  const folderButton = (a: Account, f: Folder, depth: number, where: 'fav' | 'tree') => {
+    const id = `${where}${a.id}${f.id}`
+    const color = prefs[prefKey(a.id, f.id)]?.color
+    return (
+      <button
+        key={id}
+        className={`folder ${view.accountId === a.id && view.folderId === f.id ? 'active' : ''} ${dropTarget === id ? 'drop' : ''} ${color ? 'colored' : ''}`}
+        style={{ paddingLeft: 14 + depth * 14, ...(color ? { ['--fc' as string]: color } : {}) }}
+        title={where === 'fav' ? `${f.name} · ${a.email}` : undefined}
+        onClick={() => onView({ accountId: a.id, folderId: f.id })}
+        onContextMenu={(e) => onFolderMenu(e, a, f)}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DRAG_TYPE)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          setDropTarget(id)
+        }}
+        onDragLeave={() => setDropTarget(null)}
+        onDrop={(e) => {
+          setDropTarget(null)
+          const raw = e.dataTransfer.getData(DRAG_TYPE)
+          if (raw) onDropMessages(JSON.parse(raw) as string[], a.id, f.id)
+        }}
+      >
+        <span className="ficon">{ICON[f.role]}</span>
+        <span className="fname">{f.name}</span>
+        {where === 'fav' && accounts.length > 1 && (
+          <span className="badge small" style={{ ['--acct' as string]: a.color }}>
+            {a.label}
+          </span>
+        )}
+        {f.unread > 0 && f.role !== 'sent' && f.role !== 'trash' && <span className="count">{f.unread}</span>}
+      </button>
+    )
+  }
 
   return (
     <nav className="sidebar">
@@ -33,6 +77,13 @@ export function Sidebar({ accounts, folders, status, view, onView, onAddAccount,
         <span className="fname">All inboxes</span>
         {totalUnread > 0 && <span className="count">{totalUnread}</span>}
       </button>
+
+      {favourites.length > 0 && (
+        <section className="favourites">
+          <div className="section-head">★ Favourites</div>
+          {favourites.map(({ a, f }) => folderButton(a, f, 0, 'fav'))}
+        </section>
+      )}
 
       {accounts.map((a) => {
         const list = sortFolders(folders[a.id] ?? [])
@@ -47,32 +98,7 @@ export function Sidebar({ accounts, folders, status, view, onView, onAddAccount,
               </span>
               <span className={`dot ${st?.state ?? 'idle'}`} title={st?.message ?? st?.state ?? ''} />
             </button>
-            {!collapsed[a.id] &&
-              list.map(({ folder: f, depth }) => (
-                <button
-                  key={f.id}
-                  className={`folder ${view.accountId === a.id && view.folderId === f.id ? 'active' : ''} ${dropTarget === a.id + f.id ? 'drop' : ''}`}
-                  style={{ paddingLeft: 14 + depth * 14 }}
-                  onClick={() => onView({ accountId: a.id, folderId: f.id })}
-                  onContextMenu={(e) => onFolderMenu(e, a, f)}
-                  onDragOver={(e) => {
-                    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return
-                    e.preventDefault()
-                    e.dataTransfer.dropEffect = 'move'
-                    setDropTarget(a.id + f.id)
-                  }}
-                  onDragLeave={() => setDropTarget(null)}
-                  onDrop={(e) => {
-                    setDropTarget(null)
-                    const raw = e.dataTransfer.getData(DRAG_TYPE)
-                    if (raw) onDropMessages(JSON.parse(raw) as string[], a.id, f.id)
-                  }}
-                >
-                  <span className="ficon">{ICON[f.role]}</span>
-                  <span className="fname">{f.name}</span>
-                  {f.unread > 0 && f.role !== 'sent' && f.role !== 'trash' && <span className="count">{f.unread}</span>}
-                </button>
-              ))}
+            {!collapsed[a.id] && list.map(({ folder: f, depth }) => folderButton(a, f, depth, 'tree'))}
           </section>
         )
       })}

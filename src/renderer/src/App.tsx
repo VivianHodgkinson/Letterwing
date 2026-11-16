@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ACTIONS, effectiveKeymap, type ActionId } from '@shared/keys'
 import type { MenuItem } from '@shared/api'
-import type { Account, Folder, FolderRole, MessageSummary, Outgoing, Settings, SyncStatus } from '@shared/types'
+import { prefKey, type Account, type Folder, type FolderPref, type FolderRole, type MessageSummary, type Outgoing, type Settings, type SyncStatus } from '@shared/types'
 import { api, on } from './api'
 import { AccountDialog } from './components/AccountDialog'
 import { CalendarView, type CalendarHandle } from './components/calendar/CalendarView'
@@ -10,7 +10,9 @@ import { MessageList } from './components/MessageList'
 import { MoveDialog } from './components/MoveDialog'
 import { Reader } from './components/Reader'
 import { SettingsDialog } from './components/SettingsDialog'
+import { ColorDialog } from './components/ColorDialog'
 import { PromptDialog } from './components/PromptDialog'
+import { colourMenu } from './menus'
 import { Sidebar, sortFolders } from './components/Sidebar'
 import { useKeymap } from './keymap'
 import { UpdatePill } from './components/Updates'
@@ -40,6 +42,7 @@ export function App() {
   const [status, setStatus] = useState<Record<string, SyncStatus>>({})
   const [dialog, setDialog] = useState<'account' | 'settings' | 'move' | null>(null)
   const [settingsTab, setSettingsTab] = useState<'accounts' | undefined>(undefined)
+  const [colorPick, setColorPick] = useState<{ title: string; initial?: string; onPick(color: string): void } | null>(null)
   const [prompt, setPrompt] = useState<{ title: string; label: string; initial?: string; ok: string; onSubmit(v: string): Promise<void> } | null>(null)
   const [compose, setCompose] = useState<{ initial: Outgoing; id: number } | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
@@ -426,11 +429,52 @@ export function App() {
       }
     })
 
+  /** Change (or with null, clear) a folder's favourite/colour preference */
+  const setFolderPref = async (a: Account, f: Folder, patch: Partial<FolderPref>) => {
+    const all = { ...(await api.getSettings()).folderPrefs }
+    const k = prefKey(a.id, f.id)
+    const next: FolderPref = { ...all[k], ...patch }
+    for (const key of Object.keys(next) as (keyof FolderPref)[]) if (next[key] === undefined) delete next[key]
+    if (Object.keys(next).length) all[k] = next
+    else delete all[k]
+    setSettings(await api.saveSettings({ folderPrefs: all }))
+  }
+
+  /** Swap a favourite with its neighbour */
+  const moveFavourite = async (a: Account, f: Folder, by: -1 | 1) => {
+    const all = { ...(await api.getSettings()).folderPrefs }
+    const favs = Object.entries(all)
+      .filter(([, v]) => v.favourite !== undefined)
+      .sort((x, y) => x[1].favourite! - y[1].favourite!)
+    const i = favs.findIndex(([k]) => k === prefKey(a.id, f.id))
+    const j = i + by
+    if (i < 0 || j < 0 || j >= favs.length) return
+    ;[favs[i], favs[j]] = [favs[j], favs[i]]
+    // Renumber so the order is stable whatever the old numbers were
+    favs.forEach(([k, v], n) => (all[k] = { ...v, favourite: n + 1 }))
+    setSettings(await api.saveSettings({ folderPrefs: all }))
+  }
+
   const folderMenu = async (e: React.MouseEvent, a: Account, f: Folder) => {
     e.preventDefault()
     const special = f.role !== 'other'
     const emptyable = f.role === 'trash' || f.role === 'junk'
+    const pref = settings?.folderPrefs[prefKey(a.id, f.id)]
+    const favs = Object.values(settings?.folderPrefs ?? {})
+      .map((p) => p.favourite)
+      .filter((n): n is number => n !== undefined)
+      .sort((x, y) => x - y)
+    const isFav = pref?.favourite !== undefined
     const pick = await api.showMenu([
+      ...(isFav
+        ? [
+            { id: 'unfav', label: '★ Remove from favourites' },
+            { id: 'favUp', label: 'Move up in favourites', enabled: pref!.favourite! > favs[0] },
+            { id: 'favDown', label: 'Move down in favourites', enabled: pref!.favourite! < favs[favs.length - 1] }
+          ]
+        : [{ id: 'fav', label: '☆ Add to favourites' }]),
+      { label: 'Colour', submenu: colourMenu(pref?.color) },
+      SEP,
       { id: 'read', label: 'Mark all as read' },
       { id: 'sync', label: 'Sync now', shortcut: sc('syncAll') },
       SEP,
@@ -439,7 +483,20 @@ export function App() {
       { id: 'rename', label: 'Rename…', enabled: !special },
       { id: 'delete', label: 'Delete folder…', enabled: !special }
     ])
+    if (pick?.startsWith('color:')) {
+      const c = pick.slice(6)
+      if (c === 'none') return void setFolderPref(a, f, { color: undefined })
+      if (c === 'custom') return setColorPick({ title: `Colour for ${f.name}`, initial: pref?.color, onPick: (color) => void setFolderPref(a, f, { color }) })
+      return void setFolderPref(a, f, { color: c })
+    }
     switch (pick) {
+      case 'fav':
+        return void setFolderPref(a, f, { favourite: (favs[favs.length - 1] ?? 0) + 1 })
+      case 'unfav':
+        return void setFolderPref(a, f, { favourite: undefined })
+      case 'favUp':
+      case 'favDown':
+        return void moveFavourite(a, f, pick === 'favUp' ? -1 : 1)
       case 'read':
         return markFolderRead(a.id, f.id, f.name)
       case 'sync':
@@ -631,7 +688,7 @@ export function App() {
       ([id]) => !scopeOf.get(id as ActionId) || scopeOf.get(id as ActionId) === mode
     )
   )
-  useKeymap(keymap ?? effectiveKeymap('classic', {}), handlers, !!keymap && dialog === null && !prompt && !calEditing)
+  useKeymap(keymap ?? effectiveKeymap('classic', {}), handlers, !!keymap && dialog === null && !prompt && !colorPick && !calEditing)
 
   if (!settings) return null
   const syncing = Object.values(status).some((s) => s.state === 'syncing')
@@ -717,6 +774,7 @@ export function App() {
           accounts={accounts}
           folders={folders}
           status={status}
+          prefs={settings.folderPrefs}
           view={view}
           onView={(v) => {
             setView(v)
@@ -816,6 +874,17 @@ export function App() {
         />
       )}
       {prompt && <PromptDialog {...prompt} onClose={() => setPrompt(null)} />}
+      {colorPick && (
+        <ColorDialog
+          title={colorPick.title}
+          initial={colorPick.initial}
+          onPick={(c) => {
+            colorPick.onPick(c)
+            setColorPick(null)
+          }}
+          onClose={() => setColorPick(null)}
+        />
+      )}
       {dialog === 'settings' && (
         <SettingsDialog
           initialTab={settingsTab}
