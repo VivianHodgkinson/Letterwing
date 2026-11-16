@@ -246,10 +246,45 @@ export function App() {
       anchor.current = m.key
       setSelected(new Set([m.key]))
       setPrimary(m.key)
-      void markShownRead(m).catch(fail)
     },
-    [messages, markShownRead, fail]
+    [messages]
   )
+
+  /**
+   * Marking as read follows Settings → General: by default a message turns read when you move off it
+   * (another message, another folder, the calendar, Back), not the moment it opens. Changing its read
+   * state by hand while it's open (Ctrl+Q, Ctrl+U, the menu) takes it out of this.
+   */
+  const openNow = useRef<MessageSummary | null>(null)
+  const readTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const showing = mode === 'mail' && current && selected.size <= 1 && (!singlePane || readerOpen) ? current : null
+  useEffect(() => {
+    const policy = settings?.markRead ?? 'leave'
+    const prev = openNow.current
+    clearTimeout(readTimer.current)
+    // The message left may have been deleted or moved meanwhile; then there's nothing to mark
+    if (prev && prev.key !== showing?.key && policy === 'leave') void markShownRead(prev).catch(() => {})
+    openNow.current = showing
+    if (!showing) return
+    if (policy === 'open') {
+      void markShownRead(showing).catch(fail)
+      openNow.current = null
+    } else if (policy === 'delay')
+      readTimer.current = setTimeout(() => {
+        if (openNow.current?.key !== showing.key) return
+        void markShownRead(showing).catch(fail)
+        openNow.current = null
+      }, 5000)
+  }, [showing?.key, settings?.markRead])
+  useEffect(() => () => clearTimeout(readTimer.current), [])
+
+  /** A read/unread change by hand wins over the automatic marking */
+  const handMarked = (keys: string[]) => {
+    if (openNow.current && keys.includes(openNow.current.key)) {
+      openNow.current = null
+      clearTimeout(readTimer.current)
+    }
+  }
 
   /** In conversation view an action on a row covers the whole conversation in that folder */
   const expand = useCallback(
@@ -410,6 +445,7 @@ export function App() {
         return void reply(pick, single)
       case 'read':
       case 'unread':
+        handMarked(keys)
         return void all()
           .then((k) => api.setRead(k, pick === 'read'))
           .catch(report(`mark as ${pick}`))
@@ -671,19 +707,25 @@ export function App() {
       setPrimary(null)
       setSelected(new Set())
     },
-    markRead: () =>
+    markRead: () => {
+      handMarked(keys())
       void expand(keys())
         .then((k) => api.setRead(k, true))
-        .catch(fail),
-    markUnread: () =>
+        .catch(fail)
+    },
+    markUnread: () => {
+      handMarked(keys())
       void expand(keys())
         .then((k) => api.setRead(k, false))
-        .catch(fail),
-    toggleRead: () =>
-      current &&
+        .catch(fail)
+    },
+    toggleRead: () => {
+      if (!current) return
+      handMarked(keys())
       void expand(keys())
         .then((k) => api.setRead(k, current.unread))
-        .catch(fail),
+        .catch(fail)
+    },
     toggleFlag: () => current && void api.setFlagged(keys(), !current.flagged).catch(fail),
     reply: () => void reply('reply'),
     replyAll: () => void reply('replyAll'),
@@ -909,11 +951,13 @@ export function App() {
                     remove: () => void remove(),
                     move: openMove,
                     toggleFlag: () => current && void api.setFlagged(selection(), !current.flagged).catch(fail),
-                    toggleRead: () =>
-                      current &&
+                    toggleRead: () => {
+                      if (!current) return
+                      handMarked(selection())
                       void expand(selection())
                         .then((k) => api.setRead(k, current.unread))
-                        .catch(fail),
+                        .catch(fail)
+                    },
                     editDraft: (m) => void open(m),
                     respondInvite
                   }}

@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   themeVarsLight: {},
   loadRemoteImages: false,
   conversations: true,
+  markRead: 'leave',
   icsSubscriptions: [],
   hiddenCalendars: [],
   calendarColors: {},

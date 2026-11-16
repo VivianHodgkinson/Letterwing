@@ -245,6 +245,8 @@ export interface Settings {
   themeVars: Record<string, string>
   /** The same for light mode (themeVars is dark mode's) */
   themeVarsLight: Record<string, string>
+  /** When an unread message counts as read: when you move off it (default), as soon as it's open, after 5 seconds, or only by hand */
+  markRead: 'leave' | 'open' | 'delay' | 'manual'
   /** Group messages into conversations */
   conversations: boolean
   /** Desktop notification for new mail in an inbox */

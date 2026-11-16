@@ -143,6 +143,15 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
               <input type="checkbox" checked={settings.conversations} onChange={(e) => void onChange({ conversations: e.target.checked })} />
               Show messages as conversations
             </label>
+            <label>
+              Mark messages as read
+              <select value={settings.markRead} onChange={(e) => void onChange({ markRead: e.target.value as Settings['markRead'] })}>
+                <option value="leave">When I move off them</option>
+                <option value="open">As soon as I open them</option>
+                <option value="delay">After 5 seconds</option>
+                <option value="manual">Only when I mark them (Ctrl+Q)</option>
+              </select>
+            </label>
             <label className="check">
               <input type="checkbox" checked={settings.notifications} onChange={(e) => void onChange({ notifications: e.target.checked })} />
               Desktop notification for new mail
