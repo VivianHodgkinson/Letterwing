@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- The message editor follows dark mode too: your text in the theme's colours, with your signature and the quoted original shown in a light box so logos and their own colours stay readable. Recipients still get normal black on white.
+
 ## 0.1.11
 
 **Emails follow your theme**

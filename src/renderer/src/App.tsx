@@ -226,6 +226,8 @@ export function App() {
     root.dataset.density = settings.density
     // Narrow windows always show one pane at a time, whatever the reading pane setting
     root.dataset.pane = singlePane ? 'right' : settings.readingPane
+    // The message editor follows the theme unless emails are set to show as sent
+    root.dataset.mailcolors = settings.mailColors
     const applied = Object.entries(dark ? settings.themeVars : settings.themeVarsLight)
     for (const [k, v] of applied) root.style.setProperty(k, v)
     return () => {
