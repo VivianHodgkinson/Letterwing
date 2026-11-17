@@ -132,7 +132,8 @@ export function Reader({ message, selectedCount, accounts, settings, isDraft, im
             </button>
           </div>
         )}
-        {thread.map((m) => (
+        {/* Newest on top: the latest reply is what you came to read */}
+        {[...thread].reverse().map((m) => (
           <MessageCard
             key={m.key}
             message={m}

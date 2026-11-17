@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.15
+
+- Conversations show the newest message at the top, so the latest reply is the first thing you see.
+
 ## 0.1.14
 
 - Folders other than Inbox, Sent and Drafts (such as ones your mail rules file into) now get their new mail. Before, they showed the new unread count but not the messages. They now update when their count changes and every time you open them.
