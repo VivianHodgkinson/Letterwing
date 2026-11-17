@@ -541,8 +541,8 @@ const api: Api = {
     return db.listFolders(accountId)
   },
   async listMessages(accountId, folderId, limit, before) {
-    // Opening a folder that isn't synced in the background: sync it now
-    if (accountId && folderId !== '*inbox' && db.getFolderState(accountId, folderId) === null) void sync.syncAccount(account(accountId), folderId)
+    // Opening a folder that isn't synced in the background: bring it up to date now
+    if (accountId && folderId !== '*inbox' && !before) sync.syncOpened(account(accountId), folderId)
     return db.listMessages(accountId, folderId, limit, before, store.getSettings().conversations)
   },
   async loadOlder(accountId, folderId) {

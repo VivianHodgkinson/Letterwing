@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.14
+
+- Folders other than Inbox, Sent and Drafts (such as ones your mail rules file into) now get their new mail. Before, they showed the new unread count but not the messages. They now update when their count changes and every time you open them.
+
 ## 0.1.13
 
 - Signatures follow dark mode in the editor: text in the theme's colours, logos and pictures kept as they are.

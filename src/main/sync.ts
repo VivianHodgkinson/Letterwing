@@ -98,11 +98,16 @@ export function syncAccount(account: Account, onlyFolder?: string, quiet = false
     if (!quiet) status({ accountId: account.id, state: 'syncing' })
     try {
       const c = connector(account)
+      // Other folders already synced once also sync when the server's counts for them change (a rule
+      // filed new mail there), so their new mail shows up, not just a higher unread badge
+      const changed = new Set<string>()
       if (!onlyFolder || !db.getFolder(account.id, onlyFolder)) {
+        const seen = new Map(db.listFolders(account.id).map((f) => [f.id, `${f.unread}/${f.total}`]))
         db.saveFolders(account.id, await c.listFolders())
+        for (const f of db.listFolders(account.id)) if (seen.get(f.id) !== `${f.unread}/${f.total}` && db.getFolderState(account.id, f.id) !== null) changed.add(f.id)
         notify('mail:changed', { accountId: account.id })
       }
-      const folders = db.listFolders(account.id).filter((f) => (onlyFolder ? f.id === onlyFolder : ALWAYS.has(f.role)))
+      const folders = db.listFolders(account.id).filter((f) => (onlyFolder ? f.id === onlyFolder : ALWAYS.has(f.role) || changed.has(f.id)))
       for (const f of folders) {
         const before = db.getFolderState(account.id, f.id)
         const result = await c.syncFolder(f.id, before, BATCH)
@@ -128,6 +133,18 @@ export function syncAccount(account: Account, onlyFolder?: string, quiet = false
   })()
   running.set(key, p)
   return p
+}
+
+const opened = new Map<string, number>()
+/**
+ * A folder was opened: bring it up to date. Folders outside the always-synced set only get new mail
+ * this way (or when their counts change), so every open checks, at most every 10 s per folder.
+ */
+export function syncOpened(account: Account, folderId: string): void {
+  const key = account.id + folderId
+  if (Date.now() - (opened.get(key) ?? 0) < 10_000) return
+  opened.set(key, Date.now())
+  void syncAccount(account, folderId, db.getFolderState(account.id, folderId) !== null)
 }
 
 /** Page older mail in from the server. Returns false when the folder has nothing older. */
