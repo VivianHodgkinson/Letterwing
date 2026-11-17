@@ -6,12 +6,12 @@ import { cleanBody, escapeHtml, imagesAllowed } from './mailHtml'
 const list = (as: Address[]) => as.map((a) => escapeHtml(whoFull(a))).join('; ')
 
 /**
- * Print messages (one, or a whole conversation oldest first) through the system print dialog, or save
+ * Print messages (one, or a whole conversation newest first, as on screen) through the system print dialog, or save
  * them as a PDF. Each gets a From / Sent / To / Cc / Subject header, then its body. Images from the web
  * are included only where you loaded them (or always load them), as on screen.
  */
 export async function printMessages(messages: MessageSummary[], opts: { pdf: boolean; loadRemoteImages: boolean }): Promise<boolean> {
-  const sorted = [...messages].sort((a, b) => a.date - b.date)
+  const sorted = [...messages].sort((a, b) => b.date - a.date)
   const bodies = await Promise.all(sorted.map((m) => api.getBody(m.key)))
   const remote = opts.loadRemoteImages || sorted.some((m) => imagesAllowed.has(m.key))
   const sections = sorted.map((m, i) => {
@@ -30,7 +30,7 @@ export async function printMessages(messages: MessageSummary[], opts: { pdf: boo
   <div class="body">${cleanBody(b)}</div>
 </section>`
   })
-  const title = sorted[sorted.length - 1]?.subject || 'Message'
+  const title = sorted[0]?.subject || 'Message'
   const csp = `default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: cid:${remote ? ' https: http:' : ''}; font-src data:`
   const html = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.16
+
+- Printing a conversation or saving it as PDF also puts the newest message first, matching the screen.
+
 ## 0.1.15
 
 - Conversations show the newest message at the top, so the latest reply is the first thing you see.
