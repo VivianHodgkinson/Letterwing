@@ -61,7 +61,9 @@ export function App() {
   const [settingsTab, setSettingsTab] = useState<'accounts' | undefined>(undefined)
   const [colorPick, setColorPick] = useState<{ title: string; initial?: string; onPick(color: string): void } | null>(null)
   const [prompt, setPrompt] = useState<{ title: string; label: string; initial?: string; ok: string; onSubmit(v: string): Promise<void> } | null>(null)
-  const [compose, setCompose] = useState<{ initial: Outgoing; id: number } | null>(null)
+  // `parked`: set (to the subject) while the draft steps aside so you can read other mail
+  const [compose, setCompose] = useState<{ initial: Outgoing; id: number; parked?: string } | null>(null)
+  const writing = !!compose && compose.parked === undefined
   const [notice, setNotice] = useState<Notice>(null)
   const [outbox, setOutbox] = useState<OutboxItem[]>([])
   const inOutbox = view.folderId === '*outbox'
@@ -374,6 +376,18 @@ export function App() {
     // Opening another message: save the one being written first
     await composeRef.current?.flush()
     setCompose({ initial: out, id: Date.now() })
+  }
+
+  /** Clicking another message while writing: save the draft and step it aside, so the message shows */
+  const parkCompose = () => {
+    if (!writing) return
+    void composeRef.current?.flush()
+    const subject = composeRef.current?.subject().trim() || '(no subject)'
+    setCompose((c) => c && { ...c, parked: subject })
+  }
+  const resumeCompose = () => {
+    setCompose((c) => c && { ...c, parked: undefined })
+    if (singlePane) setReaderOpen(false)
   }
 
   const defaultAccount = (): Account | undefined => accountById[view.accountId ?? ''] ?? (current ? accountById[current.accountId] : undefined) ?? accounts[0]
@@ -783,7 +797,9 @@ export function App() {
   const move = (to: (i: number) => number) => {
     const i = messages.findIndex((m) => m.key === primary)
     const m = messages[Math.max(0, Math.min(messages.length - 1, to(i)))]
-    if (m) select(m)
+    if (!m) return
+    parkCompose()
+    select(m)
   }
   const keys = () => selection()
   const respondInvite = (m: MessageSummary, answer: 'accepted' | 'tentative' | 'declined') =>
@@ -855,7 +871,7 @@ export function App() {
     clearSearch: () => {
       // Escape steps back: close the drawer, then the open message, then clear the search
       if (drawer) return setDrawer(false)
-      if (singlePane && readerOpen && !compose) return setReaderOpen(false)
+      if (singlePane && readerOpen && !writing) return setReaderOpen(false)
       setQuery('')
       searchRef.current?.blur()
     },
@@ -863,7 +879,7 @@ export function App() {
     openSettings: () => setDialog('settings'),
     addAccount: () => setDialog('account'),
     // Only while writing; otherwise the key does whatever it normally does
-    ...(compose
+    ...(writing
       ? {
           send: () => composeRef.current?.send(),
           saveDraft: () => composeRef.current?.saveDraft(),
@@ -897,6 +913,7 @@ export function App() {
         say(queued ? "No connection right now: it's in the Outbox and will send itself when you're back online." : 'Sent.')
       }}
       onStatus={say}
+      hidden={!writing}
     />
   )
 
@@ -940,6 +957,11 @@ export function App() {
           </>
         )}
         <div className="topbar-right">
+          {compose?.parked !== undefined && (
+            <button className="update-pill quiet draft-pill" title="Go back to the message you were writing" onClick={resumeCompose}>
+              ✎ Back to draft: {compose.parked}
+            </button>
+          )}
           <UpdatePill />
           <button
             className={`icon-btn ${syncing ? 'busy' : ''}`}
@@ -1034,7 +1056,7 @@ export function App() {
         ) : inOutbox ? (
           <div className="panes">
             {/* Narrow windows: the editor (after Edit) takes the whole space */}
-            {!(singlePane && composeView) && (
+            {!(singlePane && writing) && (
               <OutboxView
                 items={outbox}
                 accounts={accountById}
@@ -1050,7 +1072,7 @@ export function App() {
             {(singlePane || settings.readingPane !== 'off') && composeView}
           </div>
         ) : (
-          <div className="panes" data-show={singlePane ? (readerOpen || composeView ? 'detail' : 'list') : 'both'}>
+          <div className="panes" data-show={singlePane ? (readerOpen || writing ? 'detail' : 'list') : 'both'}>
             <MessageList
               messages={messages}
               primary={primary}
@@ -1059,6 +1081,7 @@ export function App() {
               showAccount={view.accountId === null || !!query}
               loadingMore={loadingMore}
               onSelect={(m, how) => {
+                parkCompose()
                 select(m, how)
                 if (singlePane && how === 'single') setReaderOpen(true)
               }}
@@ -1070,8 +1093,8 @@ export function App() {
               }}
               onEndReached={() => void loadMore()}
             />
-            {(singlePane || settings.readingPane !== 'off') &&
-              (composeView ?? (
+            {(singlePane || settings.readingPane !== 'off') && composeView}
+            {(singlePane || settings.readingPane !== 'off') && !writing && (
                 <Reader
                   onBack={singlePane ? () => setReaderOpen(false) : undefined}
                   message={current}
@@ -1098,13 +1121,17 @@ export function App() {
                     respondInvite
                   }}
                 />
-              ))}
+            )}
           </div>
         )}
       </div>
 
       {/* With the reading pane off, writing happens in a full-size overlay */}
-      {settings.readingPane === 'off' && !singlePane && composeView && <div className="compose-overlay">{composeView}</div>}
+      {settings.readingPane === 'off' && !singlePane && composeView && (
+        <div className="compose-overlay" style={writing ? undefined : { display: 'none' }}>
+          {composeView}
+        </div>
+      )}
       {drawer && <div className="drawer-backdrop" onClick={() => setDrawer(false)} />}
 
       {dialog === 'move' && moveAccount && (

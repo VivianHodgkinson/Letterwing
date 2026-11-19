@@ -9,6 +9,8 @@ export interface ComposeHandle {
   flush(): Promise<void>
   send(): void
   saveDraft(): void
+  /** What's in the subject line now */
+  subject(): string
 }
 
 interface Props {
@@ -18,12 +20,14 @@ interface Props {
   /** queued: no connection, so it went to the Outbox */
   onSent(queued: boolean): void
   onStatus(message: string, error?: boolean): void
+  /** Stepped aside so another message can be read: stays open (and keeps its undo history), just not shown */
+  hidden?: boolean
 }
 
 /** Idle time after the last change before the draft is saved to the server */
 const AUTOSAVE_MS = 15_000
 
-export const Compose = forwardRef<ComposeHandle, Props>(function Compose({ initial, accounts, onClose, onSent, onStatus }, ref) {
+export const Compose = forwardRef<ComposeHandle, Props>(function Compose({ initial, accounts, onClose, onSent, onStatus, hidden }, ref) {
   const [out, setOut] = useState<Outgoing>(initial)
   const [showCc, setShowCc] = useState(initial.cc.length > 0)
   const [showBcc, setShowBcc] = useState(initial.bcc.length > 0)
@@ -114,7 +118,8 @@ export const Compose = forwardRef<ComposeHandle, Props>(function Compose({ initi
     saveDraft: () => {
       dirty.current = true
       void save()
-    }
+    },
+    subject: () => latest.current.subject
   }))
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -170,7 +175,7 @@ export const Compose = forwardRef<ComposeHandle, Props>(function Compose({ initi
   const total = out.attachments.reduce((n, a) => n + a.size, 0)
 
   return (
-    <div className="compose" onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()} onDrop={onDrop}>
+    <div className="compose" style={hidden ? { display: 'none' } : undefined} onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()} onDrop={onDrop}>
       <div className="compose-bar">
         <button className="primary" onClick={() => void send()} disabled={state === 'sending'} title="Send (Ctrl+Enter)">
           {state === 'sending' ? 'Sending…' : 'Send'}

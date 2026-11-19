@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.17
+
+- While writing a message you can click another email to read it. Your draft is saved and steps aside, and *Back to draft* at the top takes you straight back to it, as you left it.
+
 ## 0.1.16
 
 - Printing a conversation or saving it as PDF also puts the newest message first, matching the screen.
