@@ -85,7 +85,8 @@ export function RulesSettings({ accounts, draft }: { accounts: Account[]; draft?
         </label>
       )}
       {error && <div className="error">{error}</div>}
-      {!result && !error && <p className="hint">Loading rules…</p>}
+      {!accounts.length && <p className="hint">Add an account first.</p>}
+      {accounts.length > 0 && !result && !error && <p className="hint">Loading rules…</p>}
       {result?.state === 'unsupported' && <p className="hint">Rules aren't available for {account?.email ?? 'this account'} yet. For now they work with Microsoft 365 accounts.</p>}
       {result?.state === 'needsApproval' && account && <NeedsApproval account={account} adminLink={result.adminLink} onAllowed={() => void load()} />}
       {result?.state === 'ok' &&
@@ -227,7 +228,8 @@ function summary(r: MailRule, folderName: (id: string | null) => string): string
     r.hasAttachments && 'has attachments'
   ].filter(Boolean)
   const then = [r.moveTo && `move to ${folderName(r.moveTo)}`, r.markRead && 'mark as read', r.delete && 'delete', r.stop && 'stop here'].filter(Boolean)
-  const main = `${when.length ? `When ${when.join(', ')}` : 'All new mail'} → ${then.join(', ') || 'nothing Letterwing shows'}`
+  // With conditions only in `other`, it isn't "all new mail"
+  const main = `${when.length ? `When ${when.join(', ')}` : r.other.length ? 'When (see below)' : 'All new mail'} → ${then.join(', ') || '(see below)'}`
   return r.other.length ? `${main}. Also: ${r.other.join('; ')}` : main
 }
 

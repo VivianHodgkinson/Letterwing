@@ -27,18 +27,13 @@ assert.equal(simple.stop, true)
 assert.equal(simple.markRead, false)
 assert.deepEqual(simple.other, [], 'empty and false values from Graph are not "other" parts')
 
-// Saving it back: whole addresses stay an exact-sender condition; an update clears what's unset
-const body = toGraph(simple, true) as { conditions: Record<string, unknown>; actions: Record<string, unknown>; displayName: string }
-assert.deepEqual(body.conditions.fromAddresses, [{ emailAddress: { address: 'helpdesk@example.com' } }])
-assert.deepEqual(body.conditions.senderContains, [])
-assert.deepEqual(body.conditions.subjectContains, [])
-assert.equal(body.conditions.hasAttachments, null)
-assert.equal(body.actions.moveToFolder, 'F1')
-assert.equal(body.actions.markAsRead, null)
-assert.equal(body.actions.stopProcessingRules, true)
+// Saving it back: whole addresses stay an exact-sender condition; only what's set is sent (Microsoft
+// replaces conditions and actions whole on update, and refuses empty lists)
+const body = toGraph(simple) as { conditions: Record<string, unknown>; actions: Record<string, unknown>; displayName: string }
+assert.deepEqual(body.conditions, { fromAddresses: [{ emailAddress: { address: 'helpdesk@example.com' } }] })
+assert.deepEqual(body.actions, { stopProcessingRules: true, moveToFolder: 'F1' })
 
-// A new rule sends only what's set
-const fresh = toGraph({ ...simple, id: '', from: ['@example.com', 'billing'], moveTo: null, markRead: true, stop: false }, false) as typeof body
+const fresh = toGraph({ ...simple, id: '', from: ['@example.com', 'billing'], moveTo: null, markRead: true, stop: false }) as typeof body
 assert.deepEqual(fresh.conditions, { senderContains: ['@example.com', 'billing'] }, 'any partial address: all become "contains", so they stay either-or')
 assert.deepEqual(fresh.actions, { stopProcessingRules: false, markAsRead: true })
 
@@ -74,5 +69,17 @@ const both = toRule(acc, {
 assert.deepEqual(both.from, [])
 assert.equal(both.other.length, 2)
 assert.equal(both.delete, true)
+
+// A contact chosen by name only (no address) is described, so the rule can't be saved without it
+const named = toRule(acc, {
+  id: 'r4',
+  displayName: 'Willem',
+  sequence: 4,
+  isEnabled: true,
+  conditions: { fromAddresses: [{ emailAddress: { name: 'Willem D' } } as never] },
+  actions: { moveToFolder: 'F1', stopProcessingRules: true }
+})
+assert.deepEqual(named.from, [])
+assert.deepEqual(named.other, ['From Willem D'])
 
 console.log('rules tests passed')

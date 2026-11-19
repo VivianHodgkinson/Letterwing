@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.18
+
+- Mail rules for Microsoft 365: **Settings → Rules** shows the rules on your mail server, in the order they run. Switch them on or off, change the order, edit, delete, or make new ones: from, sent to, subject or body words, attachments → move to a folder, mark as read, delete, stop. They run on the server, so they work when Letterwing is closed and on your other devices.
+- Right-click a message → *Create rule from this…* fills in the sender, and the folder it's in.
+- Rules made elsewhere with options Letterwing can't edit (forwarding, categories, exceptions and so on) are described in plain words and kept intact: you can still switch them on or off, reorder or delete them.
+- Rules need one more Microsoft permission, asked for only when you open Rules, so mail and calendar keep working where it isn't approved. The admin approval link now includes it.
+
 ## 0.1.17
 
 - While writing a message you can click another email to read it. Your draft is saved and steps aside, and *Back to draft* at the top takes you straight back to it, as you left it.

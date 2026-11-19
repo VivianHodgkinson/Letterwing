@@ -53,12 +53,12 @@ export async function allowRules(account: Account): Promise<void> {
 export async function saveRule(account: Account, rule: MailRule): Promise<void> {
   const g = graph(account)
   if (rule.id) {
-    await g.call(`${RULES}/${rule.id}`, { method: 'PATCH', body: JSON.stringify(toGraph(rule, true)) })
+    await g.call(`${RULES}/${rule.id}`, { method: 'PATCH', body: JSON.stringify(toGraph(rule)) })
     return
   }
   const existing = await fetchRules(account)
   const sequence = Math.max(0, ...existing.map((r) => r.sequence)) + 1
-  await g.call(RULES, { method: 'POST', body: JSON.stringify({ ...toGraph(rule, false), sequence }) })
+  await g.call(RULES, { method: 'POST', body: JSON.stringify({ ...toGraph(rule), sequence }) })
 }
 
 /** Just switch it on or off (works on rules this screen can't otherwise edit) */
@@ -140,8 +140,15 @@ function toRule(account: Account, r: GRule): MailRule {
   const folderName = (id: unknown) => (typeof id === 'string' ? (db.getFolder(account.id, id)?.name ?? 'a folder') : 'a folder')
 
   const pick = (addrKey: string, containsKey: string, words: string): string[] => {
-    const exact = addrs(c[addrKey])
+    const entries = Array.isArray(c[addrKey]) ? (c[addrKey] as Addr[]) : []
+    const exact = addrs(entries)
     const parts = strings(c[containsKey])
+    // A contact picked by name with no address (Graph gives only the name): describe it, never drop it
+    if (entries.some((e) => !e?.emailAddress?.address)) {
+      other.push(`${words} ${entries.map((e) => e?.emailAddress?.address || e?.emailAddress?.name || 'a contact').join(' or ')}`)
+      if (parts.length) other.push(`${words} contains ${list(parts)}`)
+      return []
+    }
     // Both set means both must match on the server: not something this screen can show as one list
     if (exact.length && parts.length) {
       other.push(`${words} ${list(exact)}`, `${words} contains ${list(parts)}`)
@@ -195,41 +202,31 @@ function toRule(account: Account, r: GRule): MailRule {
 
 /**
  * The Graph body for a rule. Entries that are all whole addresses become an exact-address condition;
- * otherwise "contains" (one condition each, since two different ones would both have to match).
- * `clearing` (an update): unset parts are sent empty so they're removed on the server.
+ * otherwise "contains" (one condition each, since two different ones would both have to match). Only
+ * what's set is sent: Microsoft replaces a rule's conditions and actions as a whole on update (and
+ * refuses empty lists), so leaving a part out removes it.
  */
-function toGraph(rule: MailRule, clearing: boolean): Record<string, unknown> {
-  const people = (entries: string[], addrKey: string, containsKey: string): Record<string, unknown> => {
-    const clean = entries.map((e) => e.trim()).filter(Boolean)
-    const exact = clean.length > 0 && clean.every(isAddress)
-    const out: Record<string, unknown> = {}
-    if (exact) out[addrKey] = clean.map((address) => ({ emailAddress: { address } }))
-    else if (clean.length) out[containsKey] = clean
-    if (clearing) {
-      if (!(addrKey in out)) out[addrKey] = []
-      if (!(containsKey in out)) out[containsKey] = []
-    }
-    return out
-  }
+function toGraph(rule: MailRule): Record<string, unknown> {
   const words = (v: string[]) => v.map((x) => x.trim()).filter(Boolean)
+  const people = (entries: string[], addrKey: string, containsKey: string): Record<string, unknown> => {
+    const clean = words(entries)
+    if (!clean.length) return {}
+    return clean.every(isAddress) ? { [addrKey]: clean.map((address) => ({ emailAddress: { address } })) } : { [containsKey]: clean }
+  }
   const conditions: Record<string, unknown> = {
     ...people(rule.from, 'fromAddresses', 'senderContains'),
     ...people(rule.sentTo, 'sentToAddresses', 'recipientContains')
   }
   const subject = words(rule.subjectContains)
   const any = words(rule.bodyOrSubjectContains)
-  if (subject.length || clearing) conditions.subjectContains = subject
-  if (any.length || clearing) conditions.bodyOrSubjectContains = any
+  if (subject.length) conditions.subjectContains = subject
+  if (any.length) conditions.bodyOrSubjectContains = any
   if (rule.hasAttachments) conditions.hasAttachments = true
-  else if (clearing) conditions.hasAttachments = null
 
   const actions: Record<string, unknown> = { stopProcessingRules: rule.stop }
   if (rule.moveTo) actions.moveToFolder = rule.moveTo
-  else if (clearing) actions.moveToFolder = null
   if (rule.markRead) actions.markAsRead = true
-  else if (clearing) actions.markAsRead = null
   if (rule.delete) actions.delete = true
-  else if (clearing) actions.delete = null
 
   return { displayName: rule.name.trim() || 'Rule', isEnabled: rule.enabled, conditions, actions }
 }
