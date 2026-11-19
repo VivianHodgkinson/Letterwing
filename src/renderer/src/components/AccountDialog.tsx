@@ -231,7 +231,7 @@ export function AccountDialog({ onClose, onAdded }: Props) {
           <div className="admin-help">
             <h3>Your organisation needs to approve Letterwing once</h3>
             <p>
-              Send this link to your IT administrator. They sign in with their admin account, check the permissions (mail and calendar) and click{' '}
+              Send this link to your IT administrator. They sign in with their admin account, check the permissions (mail, calendar and mail rules) and click{' '}
               <b>Accept</b>. After that, everyone at {domain} can sign in. If you're the admin, open it yourself.
             </p>
             <input readOnly value={adminLink} onFocus={(e) => e.currentTarget.select()} />

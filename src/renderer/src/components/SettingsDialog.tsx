@@ -4,6 +4,7 @@ import { KeybindingsEditor } from './KeybindingsEditor'
 import { UpdateSettings } from './Updates'
 import { api } from '../api'
 import { blockEntry } from '@shared/blocking'
+import { RulesSettings, type RuleDraft } from './RulesSettings'
 
 interface Props {
   settings: Settings
@@ -13,8 +14,12 @@ interface Props {
   onRemoveAccount(id: string): Promise<void>
   onClose(): void
   /** Open on this tab instead of General */
-  initialTab?: 'general' | 'theme' | 'keyboard' | 'accounts' | 'calendars'
+  initialTab?: SettingsTab
+  /** Open the Rules tab with this new rule ready to finish */
+  ruleDraft?: RuleDraft
 }
+
+export type SettingsTab = 'general' | 'theme' | 'keyboard' | 'accounts' | 'rules' | 'calendars'
 
 /** Variables exposed in the theme editor. Anything in styles.css :root can also be set via the raw JSON box. */
 const THEME_VARS: [string, string][] = [
@@ -54,14 +59,14 @@ const PRESETS: Record<'dark' | 'light', Record<string, Record<string, string>>> 
   }
 }
 
-export function SettingsDialog({ settings, accounts, onChange, onAccountChange, onRemoveAccount, onClose, initialTab }: Props) {
+export function SettingsDialog({ settings, accounts, onChange, onAccountChange, onRemoveAccount, onClose, initialTab, ruleDraft }: Props) {
   // Custom colours belong to a mode: the Theme tab edits the set for the mode showing now
   const dark = matchMedia('(prefers-color-scheme: dark)').matches
   const varsKey = dark ? 'themeVars' : 'themeVarsLight'
   const themeVars = settings[varsKey]
   const [raw, setRaw] = useState(JSON.stringify(themeVars, null, 2))
   const [rawError, setRawError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'general' | 'theme' | 'keyboard' | 'accounts' | 'calendars'>(initialTab ?? 'general')
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? 'general')
   const css = getComputedStyle(document.documentElement)
 
   const setVar = (k: string, v: string) => {
@@ -81,6 +86,7 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
               ['theme', 'Theme'],
               ['keyboard', 'Keyboard'],
               ['accounts', 'Accounts'],
+              ['rules', 'Rules'],
               ['calendars', 'Calendars']
             ] as const
           ).map(([k, l]) => (
@@ -230,6 +236,7 @@ export function SettingsDialog({ settings, accounts, onChange, onAccountChange, 
 
         {tab === 'keyboard' && <KeybindingsEditor settings={settings} onChange={onChange} />}
 
+        {tab === 'rules' && <RulesSettings accounts={accounts} draft={ruleDraft} />}
         {tab === 'calendars' && <CalendarSettings settings={settings} onChange={onChange} />}
 
         {tab === 'accounts' && (

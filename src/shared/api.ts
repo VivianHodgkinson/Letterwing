@@ -1,4 +1,4 @@
-import type { Account, MailtoRequest, OutboxItem, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
+import type { Account, MailRule, RulesResult, MailtoRequest, OutboxItem, AccountKind, ServerSettings, CalendarEvent, CalendarInfo, Contact, EventInput, Folder, MessageBody, MessageSummary, NewAccount, Outgoing, OutgoingAttachment, Settings, SyncStatus, UpdateStatus } from './types'
 
 /** One entry of a right-click menu. The menu is drawn by the OS; the renderer gets back the id that was clicked. */
 export interface MenuItem {
@@ -126,6 +126,17 @@ export interface Api {
   /** Answer the invitation in a message; the message then moves to Deleted Items */
   respondToInvite(messageKey: string, answer: 'accepted' | 'tentative' | 'declined', comment?: string): Promise<void>
   syncCalendars(): Promise<void>
+
+  // mail rules
+  listRules(accountId: string): Promise<RulesResult>
+  /** Browser sign-in asking for the rules permission (where people may approve it themselves) */
+  allowRules(accountId: string): Promise<void>
+  /** Create (id '') or update a rule */
+  saveRule(accountId: string, rule: MailRule): Promise<void>
+  setRuleEnabled(accountId: string, id: string, enabled: boolean): Promise<void>
+  deleteRule(accountId: string, id: string): Promise<void>
+  /** Up (-1) or down (1) in the order rules run */
+  moveRule(accountId: string, id: string, direction: -1 | 1): Promise<void>
 }
 
 export type ApiMethod = keyof Api

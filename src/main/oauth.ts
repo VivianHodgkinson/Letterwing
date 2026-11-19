@@ -27,7 +27,17 @@ export interface TokenSet {
   expiresAt: number
 }
 
-function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>): Provider {
+/**
+ * Microsoft permissions only some features need. They aren't asked for at sign-in, so an organisation that
+ * hasn't approved them can still use mail and calendar; the feature asks when it's first used.
+ */
+export const MICROSOFT_RULES_SCOPES = ['MailboxSettings.ReadWrite']
+const MICROSOFT_OPTIONAL_SCOPES = [...MICROSOFT_RULES_SCOPES]
+
+/** The organisation (or the user) hasn't approved a permission a feature needs */
+export class NeedsApprovalError extends Error {}
+
+function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>, extraScopes: string[] = []): Provider {
   const built = oauthClients()
   if (account.kind === 'microsoft') {
     const tenant = account.tenant || built.microsoft.tenant
@@ -36,7 +46,7 @@ function provider(account: Pick<Account, 'kind' | 'clientId' | 'tenant'>): Provi
     return {
       authorize: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
       token: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-      scopes: ['offline_access', 'User.Read', 'Mail.ReadWrite', 'Mail.Send', 'Calendars.ReadWrite'],
+      scopes: ['offline_access', 'User.Read', 'Mail.ReadWrite', 'Mail.Send', 'Calendars.ReadWrite', ...extraScopes],
       clientId,
       extra: { prompt: 'select_account' }
     }
@@ -72,7 +82,8 @@ export function cancelSignIn(): void {
  */
 export function adminConsentUrl(account: Pick<Account, 'kind' | 'clientId' | 'tenant' | 'email'>): string | null {
   if (account.kind !== 'microsoft') return null
-  const p = provider(account)
+  // Includes the optional permissions, so one approval covers every feature
+  const p = provider(account, MICROSOFT_OPTIONAL_SCOPES)
   const domain = account.email.split('@')[1]
   if (!domain) return null
   const url = new URL(`https://login.microsoftonline.com/${encodeURIComponent(domain)}/oauth2/v2.0/authorize`)
@@ -85,8 +96,8 @@ export function adminConsentUrl(account: Pick<Account, 'kind' | 'clientId' | 'te
 }
 
 /** Opens the browser, waits for the redirect and returns the tokens. Times out after 5 minutes. */
-export async function signIn(account: Pick<Account, 'kind' | 'clientId' | 'tenant' | 'email'>): Promise<TokenSet> {
-  const p = provider(account)
+export async function signIn(account: Pick<Account, 'kind' | 'clientId' | 'tenant' | 'email'>, extraScopes: string[] = []): Promise<TokenSet> {
+  const p = provider(account, extraScopes)
   const verifier = b64url(randomBytes(32))
   const challenge = b64url(createHash('sha256').update(verifier).digest())
   const state = b64url(randomBytes(16))
@@ -158,11 +169,34 @@ async function exchange(p: Provider, body: Record<string, string>, previousRefre
   }
 }
 
-/** A valid access token for the account, refreshing (and saving) it when it is about to expire */
-export async function accessToken(account: Account): Promise<string> {
+/** Access tokens that include optional permissions, by account and permissions (kept in memory only) */
+const scoped = new Map<string, { token: string; expiresAt: number }>()
+
+/**
+ * A valid access token for the account, refreshing (and saving) it when it is about to expire. With
+ * `extraScopes`, one that also carries those optional permissions: got silently once they're approved,
+ * otherwise a NeedsApprovalError.
+ */
+export async function accessToken(account: Account, extraScopes: string[] = []): Promise<string> {
   const raw = getSecret(account.id)
   if (!raw) throw new Error(`${account.name}: not signed in. Remove and re-add the account.`)
   const tokens = JSON.parse(raw) as TokenSet
+  if (extraScopes.length) {
+    const key = `${account.id} ${extraScopes.join(' ')}`
+    const hit = scoped.get(key)
+    if (hit && hit.expiresAt - 60_000 > Date.now()) return hit.token
+    let fresh: TokenSet
+    try {
+      fresh = await exchange(provider(account, extraScopes), { grant_type: 'refresh_token', refresh_token: tokens.refreshToken }, tokens.refreshToken)
+    } catch (e) {
+      if (/AADSTS(65001|65004|90094|90008|900941)|consent_required|interaction_required/i.test((e as Error).message)) throw new NeedsApprovalError((e as Error).message)
+      throw e
+    }
+    // Microsoft refresh tokens aren't tied to permissions: keep the newest for the everyday token too
+    setSecret(account.id, JSON.stringify({ ...tokens, refreshToken: fresh.refreshToken }))
+    scoped.set(key, { token: fresh.accessToken, expiresAt: fresh.expiresAt })
+    return fresh.accessToken
+  }
   if (tokens.expiresAt - 60_000 > Date.now()) return tokens.accessToken
   const fresh = await exchange(provider(account), { grant_type: 'refresh_token', refresh_token: tokens.refreshToken }, tokens.refreshToken)
   setSecret(account.id, JSON.stringify(fresh))

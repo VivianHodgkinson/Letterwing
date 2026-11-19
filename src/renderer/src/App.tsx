@@ -20,7 +20,8 @@ import { Compose, type ComposeHandle } from './components/Compose'
 import { MessageList } from './components/MessageList'
 import { MoveDialog } from './components/MoveDialog'
 import { Reader } from './components/Reader'
-import { SettingsDialog } from './components/SettingsDialog'
+import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
+import type { RuleDraft } from './components/RulesSettings'
 import { ColorDialog } from './components/ColorDialog'
 import { GearIcon, MenuIcon, MoonIcon, SunIcon, SyncIcon } from './components/Icons'
 import { OutboxView } from './components/OutboxView'
@@ -58,7 +59,8 @@ export function App() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<Record<string, SyncStatus>>({})
   const [dialog, setDialog] = useState<'account' | 'settings' | 'move' | null>(null)
-  const [settingsTab, setSettingsTab] = useState<'accounts' | undefined>(undefined)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
+  const [ruleDraft, setRuleDraft] = useState<RuleDraft | undefined>(undefined)
   const [colorPick, setColorPick] = useState<{ title: string; initial?: string; onPick(color: string): void } | null>(null)
   const [prompt, setPrompt] = useState<{ title: string; label: string; initial?: string; ok: string; onSubmit(v: string): Promise<void> } | null>(null)
   // `parked`: set (to the subject) while the draft steps aside so you can read other mail
@@ -496,6 +498,7 @@ export function App() {
             { id: 'printPdf', label: 'Save as PDF…' },
             SEP,
             { id: 'copyFrom', label: 'Copy sender address', enabled: !!single.from?.address },
+            { id: 'rule', label: 'Create rule from this…', enabled: !!single.from?.address },
             { id: 'copySubject', label: 'Copy subject' }
           ]
         : []),
@@ -559,6 +562,16 @@ export function App() {
         return void printMessages([single!], { pdf: pick === 'printPdf', loadRemoteImages: !!settings?.loadRemoteImages }).catch(report('print'))
       case 'copyFrom':
         return void api.copyText(single!.from!.address)
+      case 'rule': {
+        // Open Settings → Rules with the sender (and the folder it's in, if not the Inbox) filled in
+        const f = folderOf(single!)
+        setRuleDraft({
+          accountId: single!.accountId,
+          rule: { from: [single!.from!.address], name: `From ${single!.from!.name || single!.from!.address}`, moveTo: f && f.role === 'other' ? f.id : null }
+        })
+        setSettingsTab('rules')
+        return setDialog('settings')
+      }
       case 'copySubject':
         return void api.copyText(single!.subject)
       case 'selectAll':
@@ -1169,6 +1182,7 @@ export function App() {
       {dialog === 'settings' && (
         <SettingsDialog
           initialTab={settingsTab}
+          ruleDraft={ruleDraft}
           settings={settings}
           accounts={accounts}
           onChange={async (patch) => setSettings(await api.saveSettings(patch))}
@@ -1185,6 +1199,7 @@ export function App() {
           onClose={() => {
             setDialog(null)
             setSettingsTab(undefined)
+            setRuleDraft(undefined)
           }}
         />
       )}

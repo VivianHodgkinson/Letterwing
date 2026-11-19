@@ -529,3 +529,13 @@ body.dragging-resize, body.dragging-resize * { cursor: ns-resize !important; use
   }
 }
 .draft-pill { max-width: 280px; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 26px; }
+/* Settings → Rules */
+.rules { display: flex; flex-direction: column; gap: 2px; }
+.rule { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius); background: var(--bg-2); }
+.rule.off .rule-name, .rule.off .rule-summary { opacity: 0.55; }
+.rule-name { font-size: 13px; color: var(--text); }
+.rule-summary { font-size: 12px; color: var(--text-dim); overflow-wrap: anywhere; }
+.rule-warn { color: var(--danger); font-size: 12px; }
+.rule-editor { display: flex; flex-direction: column; gap: 8px; }
+.dialog .rule-move { align-items: center; }
+.dialog .rule-move select { flex: 1; }

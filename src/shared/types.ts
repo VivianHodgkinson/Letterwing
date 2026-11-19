@@ -375,3 +375,44 @@ export interface OutboxItem {
   /** Failed for a reason other than the connection: waits for you instead of retrying */
   stuck: boolean
 }
+
+/**
+ * A mail rule, in the terms the Rules screen edits. Conditions that are set must all match; within one
+ * list any entry matching is enough. For Microsoft 365 it's a server rule (it runs on new Inbox mail even
+ * when Letterwing is closed).
+ */
+export interface MailRule {
+  /** The server's id; '' for a new rule */
+  id: string
+  name: string
+  enabled: boolean
+  /** Sender addresses, or part of one ("@example.com", "example") */
+  from: string[]
+  /** Recipient addresses, or part of one */
+  sentTo: string[]
+  subjectContains: string[]
+  /** Words in the subject or the body */
+  bodyOrSubjectContains: string[]
+  hasAttachments: boolean
+  /** Folder id to move matching mail to */
+  moveTo: string | null
+  markRead: boolean
+  /** To Deleted Items */
+  delete: boolean
+  /** Don't run later rules on mail this one matched */
+  stop: boolean
+  /** Parts made elsewhere that this screen can't edit, in plain words. When any, only on/off, order and delete are offered. */
+  other: string[]
+  /** The server can't change this rule at all */
+  readOnly: boolean
+  /** The server says the rule is broken (e.g. its folder was deleted) */
+  hasError: boolean
+}
+
+/** What the Rules screen gets for an account */
+export type RulesResult =
+  | { state: 'ok'; rules: MailRule[] }
+  /** The rules permission isn't approved yet; `adminLink` is the approval link for an IT admin */
+  | { state: 'needsApproval'; adminLink: string | null }
+  /** Not available for this kind of account (yet) */
+  | { state: 'unsupported' }

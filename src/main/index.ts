@@ -11,6 +11,7 @@ import { connectorFor } from './connectors'
 import type { AttachmentData } from './connectors/types'
 import * as db from './db'
 import { adminConsentUrl, cancelSignIn, signIn } from './oauth'
+import * as rules from './rules'
 import * as store from './store'
 import * as sync from './sync'
 import * as calendar from './calendar'
@@ -514,6 +515,12 @@ const api: Api = {
   async cancelSignIn() {
     cancelSignIn()
   },
+  listRules: (accountId) => rules.listRules(account(accountId)),
+  allowRules: (accountId) => rules.allowRules(account(accountId)),
+  saveRule: (accountId, rule) => rules.saveRule(account(accountId), rule),
+  setRuleEnabled: (accountId, id, enabled) => rules.setRuleEnabled(account(accountId), id, enabled),
+  deleteRule: (accountId, id) => rules.deleteRule(account(accountId), id),
+  moveRule: (accountId, id, direction) => rules.moveRule(account(accountId), id, direction),
   async adminConsentUrl(email) {
     return adminConsentUrl({ kind: 'microsoft', email })
   },
